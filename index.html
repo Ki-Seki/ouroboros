@@ -41,10 +41,6 @@
                 <input type="password" id="api-key" placeholder="API Key (sk-...)" class="w-full text-xs border border-gray-300 rounded px-2 py-1 focus:outline-none focus:border-blue-500">
                 <input type="text" id="api-base" placeholder="Base URL (default https://api.openai.com/v1)" class="w-full text-xs border border-gray-300 rounded px-2 py-1 focus:outline-none focus:border-blue-500">
                 <input type="text" id="model" placeholder="Model (e.g. gpt-5.6-sol)" class="w-full text-xs border border-gray-300 rounded px-2 py-1 focus:outline-none focus:border-blue-500">
-                <select id="api-style" class="w-full text-xs border border-gray-300 rounded px-2 py-1 bg-white focus:outline-none focus:border-blue-500">
-                    <option value="responses">Responses API (OpenAI, reasoning + tools)</option>
-                    <option value="chat">Chat Completions (most providers)</option>
-                </select>
                 <input type="text" id="scope" placeholder="Context scope: CSS/XPath sent in full each task (optional)" class="w-full text-xs border border-gray-300 rounded px-2 py-1 focus:outline-none focus:border-blue-500">
                 <button id="save-btn" class="w-full bg-blue-600 hover:bg-blue-700 text-white px-3 py-1 rounded transition-colors">Save Settings</button>
             </div>
@@ -112,18 +108,18 @@ The page is rebuilt on every load by replaying all recorded run_js scripts, in o
         const SLOT = `ouroboros:${embedded.savedAt || 'live'}`;
         const load = key => { try { return JSON.parse(localStorage.getItem(key) || 'null'); } catch { return null; } };
         const saved = { ...embedded, ...load(SLOT) };
+        const settings = load('ouroboros:settings');
         const state = {
-            apiKey: localStorage.getItem('ouroboros_api_key') || '',
-            apiBase: localStorage.getItem('ouroboros_api_base') || '',
-            model: localStorage.getItem('ouroboros_model_name') || '',
-            api: 'responses', scope: '',
-            ...load('ouroboros:settings'),
+            apiKey: settings?.apiKey ?? '',
+            apiBase: settings?.apiBase ?? '',
+            model: settings?.model ?? '',
+            scope: settings?.scope ?? '',
             history: saved.history ?? [], mutations: saved.mutations ?? [],
         };
         const contentState = () => ({ history: state.history, mutations: state.mutations });
         function save() {
-            const { apiKey, apiBase, model, api, scope } = state;
-            localStorage.setItem('ouroboros:settings', JSON.stringify({ apiKey, apiBase, model, api, scope }));
+            const { apiKey, apiBase, model, scope } = state;
+            localStorage.setItem('ouroboros:settings', JSON.stringify({ apiKey, apiBase, model, scope }));
             localStorage.setItem(SLOT, JSON.stringify(contentState()));
         }
 
@@ -217,52 +213,22 @@ The page is rebuilt on every load by replaying all recorded run_js scripts, in o
         }
 
         // --- MODEL ---
-        async function post(path, body, signal) {
+        async function requestResponse(instructions, input, signal) {
             const base = (state.apiBase || 'https://api.openai.com/v1').replace(/\/+$/, '');
-            const res = await fetch(base + path, {
+            const res = await fetch(base + '/responses', {
                 method: 'POST', signal,
                 headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${state.apiKey}`, 'HTTP-Referer': 'https://ki-seki.github.io/features/ouroboros/', 'X-Title': 'Ouroboros' },
-                body: JSON.stringify(body),
+                body: JSON.stringify({ model: state.model, instructions, input, tools: toolSchemas().map(t => ({ type: 'function', strict: false, ...t })) }),
             });
             const data = await res.json().catch(() => ({}));
             if (!res.ok) throw new Error(data.error?.message || `${res.status} ${res.statusText}`);
-            return data;
+            return {
+                output: data.output,
+                calls: data.output.filter(o => o.type === 'function_call'),
+                text: data.output.filter(o => o.type === 'message').map(m => m.content.filter(c => c.type === 'output_text').map(c => c.text).join('')).join('\n'),
+                usage: { input: data.usage?.input_tokens, output: data.usage?.output_tokens },
+            };
         }
-
-        // Conversation items use the Responses API shape; each backend returns
-        // { output: items to append, calls: function calls, text: assistant text, usage: { input, output } }.
-        const textOf = content => typeof content === 'string' ? content : content.map(c => c.text || '').join('');
-        const backends = {
-            async responses(instructions, input, signal) {
-                const r = await post('/responses', { model: state.model, instructions, input, tools: toolSchemas().map(t => ({ type: 'function', strict: false, ...t })) }, signal);
-                return {
-                    output: r.output,
-                    calls: r.output.filter(o => o.type === 'function_call'),
-                    text: r.output.filter(o => o.type === 'message').map(m => textOf(m.content)).join('\n'),
-                    usage: { input: r.usage?.input_tokens, output: r.usage?.output_tokens },
-                };
-            },
-            async chat(system, input, signal) {
-                const messages = [{ role: 'system', content: system }];
-                for (const it of input) {
-                    if (it.type === 'function_call') {
-                        const tc = { id: it.call_id, type: 'function', function: { name: it.name, arguments: it.arguments } };
-                        const last = messages.at(-1);
-                        if (last.role === 'assistant') (last.tool_calls ??= []).push(tc);
-                        else messages.push({ role: 'assistant', content: null, tool_calls: [tc] });
-                    } else if (it.type === 'function_call_output') {
-                        messages.push({ role: 'tool', tool_call_id: it.call_id, content: it.output });
-                    } else if (it.role) {
-                        messages.push({ role: it.role, content: textOf(it.content) });
-                    }
-                }
-                const r = await post('/chat/completions', { model: state.model, messages, tools: toolSchemas().map(t => ({ type: 'function', function: t })) }, signal);
-                const m = r.choices[0].message;
-                const output = m.content ? [{ role: 'assistant', content: m.content }] : [];
-                for (const tc of m.tool_calls || []) output.push({ type: 'function_call', call_id: tc.id, name: tc.function.name, arguments: tc.function.arguments });
-                return { output, calls: output.filter(o => o.type === 'function_call'), text: m.content || '', usage: { input: r.usage?.prompt_tokens, output: r.usage?.completion_tokens } };
-            },
-        };
 
         function systemPrompt() {
             const parts = [$('ouroboros-system_prompt').textContent.trim()];
@@ -285,7 +251,7 @@ The page is rebuilt on every load by replaying all recorded run_js scripts, in o
                 const input = [...state.history.map(({ role, content }) => ({ role, content })), { role: 'user', content: prompt }];
                 for (let step = 0; ; step++) {
                     if (step === MAX_STEPS) { summary = `Stopped after ${MAX_STEPS} steps.`; log('error', summary); break; }
-                    const { output, calls, text, usage } = await backends[state.api](instructions, input, controller.signal);
+                    const { output, calls, text, usage } = await requestResponse(instructions, input, controller.signal);
                     responded = true;
                     taskTokens += (usage.input || 0) + (usage.output || 0);
                     els.usage.textContent = `in ${fmt(usage.input)} · out ${fmt(usage.output)} · task ${fmt(taskTokens)}`;
@@ -448,7 +414,7 @@ The page is rebuilt on every load by replaying all recorded run_js scripts, in o
         }
 
         function bindSettings() {
-            const fields = { apiKey: 'api-key', apiBase: 'api-base', model: 'model', api: 'api-style', scope: 'scope' };
+            const fields = { apiKey: 'api-key', apiBase: 'api-base', model: 'model', scope: 'scope' };
             for (const [key, id] of Object.entries(fields)) $(id).value = state[key];
             $('settings-panel').open = !state.apiKey;
             $('save-btn').onclick = () => {
