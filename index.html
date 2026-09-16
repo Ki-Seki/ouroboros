@@ -128,8 +128,8 @@
             <section class="settings-section" aria-labelledby="connection-title">
                 <h3 id="connection-title">Connection</h3>
                 <label class="ui-label settings-field">API key<input type="password" id="api-key" placeholder="sk-…" class="ui-field" autocomplete="off"></label>
-                <label class="ui-label settings-field">Base URL<input type="text" id="api-base" placeholder="https://api.openai.com/v1" class="ui-field" spellcheck="false"></label>
-                <label class="ui-label settings-field">Model<input type="text" id="model" placeholder="gpt-5.6-sol" class="ui-field" spellcheck="false"></label>
+                <label class="ui-label settings-field">Base URL<input type="text" id="api-base" value="https://api.openai.com/v1" class="ui-field" spellcheck="false"></label>
+                <label class="ui-label settings-field">Model<input type="text" id="model" value="gpt-5.6-sol" class="ui-field" spellcheck="false"></label>
                 <div class="flex justify-end"><button id="save-btn" type="button" class="ui-button">Save settings</button></div>
             </section>
             <section class="settings-section" aria-labelledby="usage-title">
@@ -205,7 +205,6 @@ The page is rebuilt on every load by replaying all recorded run_js scripts, in o
         // --- CONSTANTS ---
         const MAX_STEPS = 40;
         const SETTINGS_KEY = 'ouroboros:settings';
-        const DEFAULT_API_BASE = 'https://api.openai.com/v1';
         const HARNESS = '#ouroboros-core, #ouroboros-settings, #desktop-dock, #ouroboros-system_prompt, #ouroboros-state';
         const AsyncFunction = Object.getPrototypeOf(async function () {}).constructor;
         const $ = id => document.getElementById(id);
@@ -221,8 +220,8 @@ The page is rebuilt on every load by replaying all recorded run_js scripts, in o
         const storedSettings = load(SETTINGS_KEY);
         const settings = {
             apiKey: storedSettings?.apiKey ?? '',
-            apiBase: storedSettings?.apiBase ?? '',
-            model: storedSettings?.model ?? '',
+            apiBase: storedSettings?.apiBase || $('api-base').defaultValue,
+            model: storedSettings?.model || $('model').defaultValue,
             usage: storedSettings?.usage ?? { input: 0, output: 0, responses: 0, lastTask: null },
         };
         const saved = load(CONTENT_KEY) ?? embedded;
@@ -317,7 +316,7 @@ The page is rebuilt on every load by replaying all recorded run_js scripts, in o
 
         // --- MODEL ---
         async function requestResponse(instructions, input, signal) {
-            const base = (settings.apiBase || DEFAULT_API_BASE).replace(/\/+$/, '');
+            const base = settings.apiBase.replace(/\/+$/, '');
             const res = await fetch(base + '/responses', {
                 method: 'POST', signal,
                 headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${settings.apiKey}` },
@@ -848,7 +847,11 @@ The page is rebuilt on every load by replaying all recorded run_js scripts, in o
             $('model-btn').textContent = settings.model || 'Choose model';
             $('model-btn').onclick = () => windowAction('ouroboros-settings', 'show');
             $('save-btn').onclick = () => {
-                for (const [key, id] of Object.entries(fields)) settings[key] = $(id).value.trim();
+                for (const [key, id] of Object.entries(fields)) {
+                    const field = $(id);
+                    settings[key] = field.value.trim() || field.defaultValue;
+                    field.value = settings[key];
+                }
                 try {
                     saveSettings();
                     $('model-btn').textContent = settings.model || 'Choose model';
