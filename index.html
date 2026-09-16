@@ -19,7 +19,7 @@
                 <button id="undo-btn" title="Undo last task" class="hover:text-white transition-colors">
                     <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M9 15L3 9m0 0l6-6M3 9h12a6 6 0 010 12h-3"></path></svg>
                 </button>
-                <button id="reset-btn" title="Reset page (keeps settings and skills)" class="hover:text-white transition-colors">
+                <button id="reset-btn" title="Reset page (keeps settings)" class="hover:text-white transition-colors">
                     <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0l3.181 3.183a8.25 8.25 0 0013.803-3.7M4.031 9.865a8.25 8.25 0 0113.803-3.7l3.181 3.182"></path></svg>
                 </button>
                 <button id="export-btn" title="Export HTML" class="hover:text-white transition-colors">
@@ -50,31 +50,12 @@
             </div>
         </details>
 
-        <!-- Skills -->
-        <details id="skills-panel" class="border-b border-gray-200 text-xs">
-            <summary class="px-4 py-2 cursor-pointer text-gray-600 hover:bg-gray-50">Skills <span id="skill-count" class="text-gray-400"></span></summary>
-            <div class="px-4 pb-3 flex flex-col gap-2">
-                <div id="skill-list" class="flex flex-col gap-1"></div>
-                <div id="skill-editor" class="hidden flex flex-col gap-2 border-t border-gray-200 pt-2">
-                    <input type="text" id="skill-name" placeholder="name (invoke with /name)" class="w-full text-xs border border-gray-300 rounded px-2 py-1 focus:outline-none focus:border-blue-500">
-                    <input type="text" id="skill-desc" placeholder="One-line description shown to the model" class="w-full text-xs border border-gray-300 rounded px-2 py-1 focus:outline-none focus:border-blue-500">
-                    <textarea id="skill-content" rows="6" placeholder="Instructions (Markdown)" class="w-full text-xs border border-gray-300 rounded px-2 py-1 focus:outline-none focus:border-blue-500 resize-y"></textarea>
-                    <div class="flex gap-2">
-                        <button id="skill-save" class="bg-blue-600 hover:bg-blue-700 text-white px-3 py-1 rounded transition-colors">Save</button>
-                        <button id="skill-delete" class="text-red-600 hover:underline px-2">Delete</button>
-                        <button id="skill-cancel" class="text-gray-500 hover:underline px-2">Cancel</button>
-                    </div>
-                </div>
-                <button id="new-skill-btn" class="self-start text-blue-600 hover:underline">+ New skill</button>
-            </div>
-        </details>
-
         <!-- Activity Log -->
         <div id="activity-log" class="flex-1 min-h-[100px] p-4 overflow-y-auto bg-white text-xs font-mono select-text"></div>
 
         <!-- Terminal / Prompt Box -->
         <div class="p-4 border-t border-gray-200 bg-gray-50 rounded-b-lg">
-            <textarea id="user-prompt" placeholder="Command the Ouroboros (e.g., 'Create a calculator', or '/skill-name ...')" class="w-full text-sm border border-gray-300 rounded p-2 mb-2 focus:outline-none focus:border-blue-500 min-h-[80px] resize-none"></textarea>
+            <textarea id="user-prompt" placeholder="Command the Ouroboros (e.g., 'Create a calculator')" class="w-full text-sm border border-gray-300 rounded p-2 mb-2 focus:outline-none focus:border-blue-500 min-h-[80px] resize-none"></textarea>
             <div class="flex justify-between items-center">
                 <span class="text-xs text-gray-400">Ctrl/⌘+Enter to send</span>
                 <button id="execute-btn" class="bg-gray-900 hover:bg-gray-800 text-white text-sm font-medium px-4 py-2 rounded transition-colors">Take a Bite 🐍</button>
@@ -91,7 +72,6 @@ You are Ouroboros, a self-editing web page. The user asks for features; you buil
 - read_dom(selector, outline): read part of the page. CSS selector, or XPath starting with "/". Use outline=true first to orient cheaply; fetch full HTML only for the parts you need.
 - eval_js(code): read-only JavaScript (computed styles, element state, try a fetch). Not recorded. Never mutate here.
 - run_js(code): mutate the page. Recorded and replayed in order on every load. Errors are reported back and the failed script is not recorded.
-- load_skill(name) / save_skill(name, description, content): read or write reusable instructions. Available skills are listed below.
 
 `code` is the body of an async function: `return` a string or JSON-able value to see it (return `.outerHTML` for elements); use `await import('https://esm.sh/pkg')` for libraries. Top-level `const` is local to the call; share state via `window`.
 The page outline below was captured when the task started; use read_dom for anything current.
@@ -112,7 +92,7 @@ The page is rebuilt on every load by replaying all recorded run_js scripts, in o
 - Users may edit this prompt to customize you.
     </script>
 
-    <!-- EMBEDDED STATE (filled on export so the file carries its history, mutations and skills) -->
+    <!-- EMBEDDED STATE (filled on export so the file carries its history and mutations) -->
     <script type="application/json" id="ouroboros-state">{}</script>
 
     <!-- MAIN APPLICATION LOGIC -->
@@ -124,23 +104,23 @@ The page is rebuilt on every load by replaying all recorded run_js scripts, in o
         const $ = id => document.getElementById(id);
 
         // --- STATE ---
-        // Settings belong to the user and stay in this browser. Content (history, mutations, skills) is what the
+        // Settings belong to the user and stay in this browser. Content (history, mutations) is what the
         // page is made of: it is written into exported files, and each exported snapshot continues in its own slot.
         // The pristine page is captured before any mutation is replayed; export = pristine + content.
         const pristine = '<!DOCTYPE html>\n' + document.documentElement.outerHTML;
         const embedded = JSON.parse($('ouroboros-state').textContent || '{}');
         const SLOT = `ouroboros:${embedded.savedAt || 'live'}`;
         const load = key => { try { return JSON.parse(localStorage.getItem(key) || 'null'); } catch { return null; } };
+        const saved = { ...embedded, ...load(SLOT) };
         const state = {
             apiKey: localStorage.getItem('ouroboros_api_key') || '',
             apiBase: localStorage.getItem('ouroboros_api_base') || '',
             model: localStorage.getItem('ouroboros_model_name') || '',
             api: 'responses', scope: '',
             ...load('ouroboros:settings'),
-            history: [], mutations: [], skills: [],
-            ...embedded, ...load(SLOT),
+            history: saved.history ?? [], mutations: saved.mutations ?? [],
         };
-        const contentState = () => { const { apiKey, apiBase, model, api, scope, savedAt, ...rest } = state; return rest; };
+        const contentState = () => ({ history: state.history, mutations: state.mutations });
         function save() {
             const { apiKey, apiBase, model, api, scope } = state;
             localStorage.setItem('ouroboros:settings', JSON.stringify({ apiKey, apiBase, model, api, scope }));
@@ -149,7 +129,6 @@ The page is rebuilt on every load by replaying all recorded run_js scripts, in o
 
         let controller = null;   // AbortController of the running task
         let busy = true;         // true until replay finishes
-        let editingSkill = -1;
         const runtimeErrors = [];
         const noteError = msg => { runtimeErrors.push(msg); if (runtimeErrors.length > 10) runtimeErrors.shift(); };
         addEventListener('error', e => noteError(`${e.message} (${e.filename?.split('/').pop() || 'inline'}:${e.lineno})`));
@@ -215,18 +194,6 @@ The page is rebuilt on every load by replaying all recorded run_js scripts, in o
                 description: 'Mutate the page with JavaScript. Recorded and replayed in order on every page load, so it must be self-contained and idempotent. Failed scripts are not recorded.',
                 parameters: CODE_SCHEMA,
                 run: async ({ code }, task) => { const out = await runJs(code); state.mutations.push({ task, code }); save(); return out; },
-            },
-            {
-                name: 'load_skill',
-                description: 'Return the full instructions of a skill listed in the system prompt.',
-                parameters: { type: 'object', properties: { name: { type: 'string' } }, required: ['name'] },
-                run: ({ name }) => state.skills.find(s => s.name === name)?.content ?? `No skill named "${name}"`,
-            },
-            {
-                name: 'save_skill',
-                description: 'Create or update a reusable skill (Markdown instructions) for future tasks, e.g. when the user asks you to remember a workflow.',
-                parameters: { type: 'object', properties: { name: { type: 'string' }, description: { type: 'string' }, content: { type: 'string' } }, required: ['name', 'description', 'content'] },
-                run: skill => `Skill "${upsertSkill(skill).name}" saved.`,
             },
         ];
         const toolSchemas = () => TOOLS.map(({ run, ...schema }) => schema);
@@ -299,17 +266,10 @@ The page is rebuilt on every load by replaying all recorded run_js scripts, in o
 
         function systemPrompt() {
             const parts = [$('ouroboros-system_prompt').textContent.trim()];
-            if (state.skills.length) parts.push('## Skills\n' + state.skills.map(s => `- ${s.name}: ${s.description}`).join('\n'));
             parts.push('## Current page (outline)\n' + clip(outlineOf(document.body).join('\n'), 12000));
             if (state.scope) parts.push(`## Scope "${state.scope}" (full HTML)\n` + (clip(resolve(state.scope).map(n => render(n)).join('\n'), 40000) || '(no match)'));
             if (runtimeErrors.length) parts.push('## Runtime errors since the last task\n' + runtimeErrors.map(e => '- ' + e).join('\n'));
             return parts.join('\n\n');
-        }
-
-        function expandSkill(prompt) {
-            const m = prompt.match(/^\/(\S+)\s*([\s\S]*)/);
-            const skill = m && state.skills.find(s => s.name === m[1]);
-            return skill ? `Apply the skill "${skill.name}":\n${skill.content}\n\nTask: ${m[2] || '(follow the skill)'}` : prompt;
         }
 
         // --- AGENT LOOP ---
@@ -322,7 +282,7 @@ The page is rebuilt on every load by replaying all recorded run_js scripts, in o
             try {
                 const instructions = systemPrompt();
                 runtimeErrors.length = 0;
-                const input = [...state.history.map(({ role, content }) => ({ role, content })), { role: 'user', content: expandSkill(prompt) }];
+                const input = [...state.history.map(({ role, content }) => ({ role, content })), { role: 'user', content: prompt }];
                 for (let step = 0; ; step++) {
                     if (step === MAX_STEPS) { summary = `Stopped after ${MAX_STEPS} steps.`; log('error', summary); break; }
                     const { output, calls, text, usage } = await backends[state.api](instructions, input, controller.signal);
@@ -393,7 +353,7 @@ The page is rebuilt on every load by replaying all recorded run_js scripts, in o
                 if (!confirm('Reset to the exported snapshot? Everything done since the export is discarded; settings are kept.')) return;
                 localStorage.removeItem(SLOT);
             } else {
-                if (!confirm('Reset the page to its pristine state? Mutations and history are cleared; settings and skills are kept.')) return;
+                if (!confirm('Reset the page to its pristine state? Mutations and history are cleared; settings are kept.')) return;
                 Object.assign(state, { mutations: [], history: [] });
                 save();
             }
@@ -446,7 +406,7 @@ The page is rebuilt on every load by replaying all recorded run_js scripts, in o
         function logTool(name, args) {
             const el = document.createElement('details');
             el.className = 'mb-2 text-gray-600';
-            const label = [args.selector, args.outline && '(outline)', args.name].filter(Boolean).join(' ');
+            const label = [args.selector, args.outline && '(outline)'].filter(Boolean).join(' ');
             el.innerHTML = `<summary class="cursor-pointer"><span class="font-bold text-purple-600">${name}</span> <span class="text-gray-400">${esc(label)}</span> <span class="status"></span></summary>`
                 + (args.code ? `<pre class="whitespace-pre-wrap bg-gray-50 border border-gray-200 rounded p-2 mt-1">${esc(args.code)}</pre>` : '')
                 + `<pre class="whitespace-pre-wrap text-gray-500 mt-1 max-h-40 overflow-y-auto">…</pre>`;
@@ -499,50 +459,9 @@ The page is rebuilt on every load by replaying all recorded run_js scripts, in o
             };
         }
 
-        function renderSkills() {
-            $('skill-count').textContent = state.skills.length ? `(${state.skills.length})` : '';
-            $('skill-list').innerHTML = state.skills.map((s, i) =>
-                `<button data-i="${i}" class="text-left truncate hover:text-blue-600"><b>/${esc(s.name)}</b> <span class="text-gray-500">${esc(s.description)}</span></button>`
-            ).join('') || '<span class="text-gray-400">Skills are reusable instructions: the model loads them when relevant, or you invoke one with /name.</span>';
-        }
-
-        function editSkill(i) {
-            editingSkill = i;
-            const s = state.skills[i] || { name: '', description: '', content: '' };
-            $('skill-name').value = s.name;
-            $('skill-desc').value = s.description;
-            $('skill-content').value = s.content;
-            $('skill-delete').classList.toggle('hidden', i < 0);
-            $('skill-editor').classList.remove('hidden');
-        }
-
-        function upsertSkill({ name, description, content }) {
-            const skill = { name: name.trim().replace(/\s+/g, '-'), description, content };   // /name invocation needs a whitespace-free name
-            const i = state.skills.findIndex(s => s.name === skill.name);
-            i < 0 ? state.skills.push(skill) : state.skills.splice(i, 1, skill);
-            save(); renderSkills(); return skill;
-        }
-
-        function bindSkills() {
-            const close = () => $('skill-editor').classList.add('hidden');
-            $('skill-list').onclick = e => { const b = e.target.closest('button'); if (b) editSkill(+b.dataset.i); };
-            $('new-skill-btn').onclick = () => editSkill(-1);
-            $('skill-cancel').onclick = close;
-            $('skill-delete').onclick = () => { state.skills.splice(editingSkill, 1); save(); renderSkills(); close(); };
-            $('skill-save').onclick = () => {
-                const name = $('skill-name').value.trim();
-                if (!name) return;
-                if (editingSkill >= 0) state.skills.splice(editingSkill, 1);
-                upsertSkill({ name, description: $('skill-desc').value.trim(), content: $('skill-content').value.trim() });
-                close();
-            };
-        }
-
         // --- INITIALIZATION ---
         async function init() {
             bindSettings();
-            bindSkills();
-            renderSkills();
             $('export-btn').onclick = exportHtml;
             $('reset-btn').onclick = reset;
             $('undo-btn').onclick = undo;
