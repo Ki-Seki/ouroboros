@@ -41,7 +41,6 @@
                 <input type="password" id="api-key" placeholder="API Key (sk-...)" class="w-full text-xs border border-gray-300 rounded px-2 py-1 focus:outline-none focus:border-blue-500">
                 <input type="text" id="api-base" placeholder="Base URL (default https://api.openai.com/v1)" class="w-full text-xs border border-gray-300 rounded px-2 py-1 focus:outline-none focus:border-blue-500">
                 <input type="text" id="model" placeholder="Model (e.g. gpt-5.6-sol)" class="w-full text-xs border border-gray-300 rounded px-2 py-1 focus:outline-none focus:border-blue-500">
-                <input type="text" id="scope" placeholder="Context scope: CSS/XPath sent in full each task (optional)" class="w-full text-xs border border-gray-300 rounded px-2 py-1 focus:outline-none focus:border-blue-500">
                 <button id="save-btn" class="w-full bg-blue-600 hover:bg-blue-700 text-white px-3 py-1 rounded transition-colors">Save Settings</button>
             </div>
         </details>
@@ -113,13 +112,12 @@ The page is rebuilt on every load by replaying all recorded run_js scripts, in o
             apiKey: settings?.apiKey ?? '',
             apiBase: settings?.apiBase ?? '',
             model: settings?.model ?? '',
-            scope: settings?.scope ?? '',
             history: saved.history ?? [], mutations: saved.mutations ?? [],
         };
         const contentState = () => ({ history: state.history, mutations: state.mutations });
         function save() {
-            const { apiKey, apiBase, model, scope } = state;
-            localStorage.setItem('ouroboros:settings', JSON.stringify({ apiKey, apiBase, model, scope }));
+            const { apiKey, apiBase, model } = state;
+            localStorage.setItem('ouroboros:settings', JSON.stringify({ apiKey, apiBase, model }));
             localStorage.setItem(SLOT, JSON.stringify(contentState()));
         }
 
@@ -233,7 +231,6 @@ The page is rebuilt on every load by replaying all recorded run_js scripts, in o
         function systemPrompt() {
             const parts = [$('ouroboros-system_prompt').textContent.trim()];
             parts.push('## Current page (outline)\n' + clip(outlineOf(document.body).join('\n'), 12000));
-            if (state.scope) parts.push(`## Scope "${state.scope}" (full HTML)\n` + (clip(resolve(state.scope).map(n => render(n)).join('\n'), 40000) || '(no match)'));
             if (runtimeErrors.length) parts.push('## Runtime errors since the last task\n' + runtimeErrors.map(e => '- ' + e).join('\n'));
             return parts.join('\n\n');
         }
@@ -390,7 +387,7 @@ The page is rebuilt on every load by replaying all recorded run_js scripts, in o
         function updateBaseline() {
             if (controller) return;
             try { els.usage.textContent = `${lastTaskUsage}~${fmt(systemPrompt().length / 4)} tok baseline`; }
-            catch (e) { els.usage.textContent = `invalid scope: ${e.message}`; }
+            catch (e) { els.usage.textContent = `context unavailable: ${e.message}`; }
         }
 
         function setRunning(on) {
@@ -414,7 +411,7 @@ The page is rebuilt on every load by replaying all recorded run_js scripts, in o
         }
 
         function bindSettings() {
-            const fields = { apiKey: 'api-key', apiBase: 'api-base', model: 'model', scope: 'scope' };
+            const fields = { apiKey: 'api-key', apiBase: 'api-base', model: 'model' };
             for (const [key, id] of Object.entries(fields)) $(id).value = state[key];
             $('settings-panel').open = !state.apiKey;
             $('save-btn').onclick = () => {
