@@ -64,7 +64,7 @@
 You are Ouroboros, a self-editing web page. The user asks for features; you build them by running JavaScript against the live DOM of this very page, using the tools below. Work as an agent: orient, act, verify, then stop.
 
 ## Tools
-- read_dom(selector, outline): read part of the page. CSS selector, or XPath starting with "/". Use outline=true first to orient cheaply; fetch full HTML only for the parts you need.
+- read_dom(selector, outline): read part of the page using a CSS selector. Use outline=true first to orient cheaply; set outline=false to fetch full HTML only for the parts you need.
 - eval_js(code): read-only JavaScript (computed styles, element state, try a fetch). Not recorded. Never mutate here.
 - run_js(code): mutate the page. Recorded and replayed in order on every load. Errors are reported back and the failed script is not recorded.
 
@@ -88,38 +88,39 @@ The page is rebuilt on every load by replaying all recorded run_js scripts, in o
     </script>
 
     <!-- EMBEDDED STATE (filled on export so the file carries its history and mutations) -->
-    <script type="application/json" id="ouroboros-state">{}</script>
+    <script type="application/json" id="ouroboros-state">{"history":[],"mutations":[]}</script>
 
     <!-- MAIN APPLICATION LOGIC -->
     <script type="module">
         // --- CONSTANTS ---
         const MAX_STEPS = 40;
+        const SETTINGS_KEY = 'ouroboros:settings';
+        const DEFAULT_API_BASE = 'https://api.openai.com/v1';
         const HARNESS = '#ouroboros-core, #ouroboros-system_prompt, #ouroboros-state';
         const AsyncFunction = Object.getPrototypeOf(async function () {}).constructor;
         const $ = id => document.getElementById(id);
 
         // --- STATE ---
-        // Settings belong to the user and stay in this browser. Content (history, mutations) is what the
-        // page is made of: it is written into exported files, and each exported snapshot continues in its own slot.
+        // Settings stay in the browser; state contains only the history and mutations carried by exports.
+        // Each exported snapshot continues in its own local storage slot.
         // The pristine page is captured before any mutation is replayed; export = pristine + content.
         const pristine = '<!DOCTYPE html>\n' + document.documentElement.outerHTML;
-        const embedded = JSON.parse($('ouroboros-state').textContent || '{}');
-        const SLOT = `ouroboros:${embedded.savedAt || 'live'}`;
-        const load = key => { try { return JSON.parse(localStorage.getItem(key) || 'null'); } catch { return null; } };
-        const saved = { ...embedded, ...load(SLOT) };
-        const settings = load('ouroboros:settings');
-        const state = {
-            apiKey: settings?.apiKey ?? '',
-            apiBase: settings?.apiBase ?? '',
-            model: settings?.model ?? '',
-            history: saved.history ?? [], mutations: saved.mutations ?? [],
+        const embedded = JSON.parse($('ouroboros-state').textContent);
+        const CONTENT_KEY = `ouroboros:${embedded.savedAt ?? 'live'}`;
+        const load = key => { try { return JSON.parse(localStorage.getItem(key)); } catch { return null; } };
+        const storedSettings = load(SETTINGS_KEY);
+        const settings = {
+            apiKey: storedSettings?.apiKey ?? '',
+            apiBase: storedSettings?.apiBase ?? '',
+            model: storedSettings?.model ?? '',
         };
-        const contentState = () => ({ history: state.history, mutations: state.mutations });
-        function save() {
-            const { apiKey, apiBase, model } = state;
-            localStorage.setItem('ouroboros:settings', JSON.stringify({ apiKey, apiBase, model }));
-            localStorage.setItem(SLOT, JSON.stringify(contentState()));
-        }
+        const saved = load(CONTENT_KEY) ?? embedded;
+        const state = {
+            history: saved.history,
+            mutations: saved.mutations,
+        };
+        const saveSettings = () => localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings));
+        const saveContent = () => localStorage.setItem(CONTENT_KEY, JSON.stringify(state));
 
         let controller = null;   // AbortController of the running task
         let busy = true;         // true until replay finishes
@@ -129,12 +130,6 @@ The page is rebuilt on every load by replaying all recorded run_js scripts, in o
         addEventListener('unhandledrejection', e => noteError(`Unhandled rejection: ${e.reason?.message || e.reason}`));
 
         // --- DOM ACCESS ---
-        function resolve(selector) {
-            if (!/^\(*\//.test(selector)) return [...document.querySelectorAll(selector)];
-            const r = document.evaluate(selector, document, null, XPathResult.ORDERED_NODE_SNAPSHOT_TYPE, null);
-            return Array.from({ length: r.snapshotLength }, (_, i) => r.snapshotItem(i));
-        }
-
         function htmlOf(el) {
             const clone = el.cloneNode(true);
             clone.querySelectorAll(HARNESS).forEach(n => n.replaceChildren(document.createComment(' harness, omitted ')));
@@ -160,21 +155,20 @@ The page is rebuilt on every load by replaying all recorded run_js scripts, in o
             return lines;
         }
 
-        const render = (node, outline) => node.nodeType !== 1 ? node.textContent : outline ? outlineOf(node).join('\n') : htmlOf(node);
         const clip = (s, n) => s.length > n ? s.slice(0, n) + `\n… [${s.length - n} more chars]` : s;
         const show = v => { try { return v === undefined ? 'ok' : typeof v === 'string' ? v : (JSON.stringify(v, null, 1) ?? String(v)); } catch { return String(v); } };
         const runJs = async code => show(await new AsyncFunction(code)());
 
         // --- TOOLS ---
-        const CODE_SCHEMA = { type: 'object', properties: { code: { type: 'string', description: 'Body of an async function' } }, required: ['code'] };
+        const CODE_SCHEMA = { type: 'object', properties: { code: { type: 'string', description: 'Body of an async function' } }, required: ['code'], additionalProperties: false };
         const TOOLS = [
             {
                 name: 'read_dom',
                 description: 'Read part of the page as HTML. With outline=true, return a compact tree (tag#id.classes "text") instead. Use outline first to orient, then read only what you need.',
-                parameters: { type: 'object', properties: { selector: { type: 'string', description: 'CSS selector, or XPath starting with "/"' }, outline: { type: 'boolean' } }, required: ['selector'] },
+                parameters: { type: 'object', properties: { selector: { type: 'string', description: 'CSS selector' }, outline: { type: 'boolean' } }, required: ['selector', 'outline'], additionalProperties: false },
                 run: ({ selector, outline }) => {
-                    const nodes = resolve(selector);
-                    return nodes.length ? clip(nodes.map(n => render(n, outline)).join('\n\n'), 30000) : `No element matches ${selector}`;
+                    const nodes = [...document.querySelectorAll(selector)];
+                    return nodes.length ? clip(nodes.map(el => outline ? outlineOf(el).join('\n') : htmlOf(el)).join('\n\n'), 30000) : `No element matches ${selector}`;
                 },
             },
             {
@@ -187,16 +181,16 @@ The page is rebuilt on every load by replaying all recorded run_js scripts, in o
                 name: 'run_js',
                 description: 'Mutate the page with JavaScript. Recorded and replayed in order on every page load, so it must be self-contained and idempotent. Failed scripts are not recorded.',
                 parameters: CODE_SCHEMA,
-                run: async ({ code }, task) => { const out = await runJs(code); state.mutations.push({ task, code }); save(); return out; },
+                run: async ({ code }, task) => { const out = await runJs(code); state.mutations.push({ task, code }); saveContent(); return out; },
             },
         ];
-        const toolSchemas = () => TOOLS.map(({ run, ...schema }) => schema);
+        const TOOL_SCHEMAS = TOOLS.map(({ run, ...schema }) => ({ type: 'function', strict: true, ...schema }));
 
         async function runTool(call, task) {
             const tool = TOOLS.find(t => t.name === call.name);
             if (!tool) return `Error: unknown tool ${call.name}`;
             let args;
-            try { args = JSON.parse(call.arguments || '{}'); } catch { return 'Error: arguments are not valid JSON'; }
+            try { args = JSON.parse(call.arguments); } catch { return 'Error: arguments are not valid JSON'; }
             const done = logTool(call.name, args);
             try {
                 const out = await tool.run(args, task);
@@ -212,11 +206,11 @@ The page is rebuilt on every load by replaying all recorded run_js scripts, in o
 
         // --- MODEL ---
         async function requestResponse(instructions, input, signal) {
-            const base = (state.apiBase || 'https://api.openai.com/v1').replace(/\/+$/, '');
+            const base = (settings.apiBase || DEFAULT_API_BASE).replace(/\/+$/, '');
             const res = await fetch(base + '/responses', {
                 method: 'POST', signal,
-                headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${state.apiKey}`, 'HTTP-Referer': 'https://ki-seki.github.io/features/ouroboros/', 'X-Title': 'Ouroboros' },
-                body: JSON.stringify({ model: state.model, instructions, input, tools: toolSchemas().map(t => ({ type: 'function', strict: false, ...t })) }),
+                headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${settings.apiKey}` },
+                body: JSON.stringify({ model: settings.model, instructions, input, tools: TOOL_SCHEMAS }),
             });
             const data = await res.json().catch(() => ({}));
             if (!res.ok) throw new Error(data.error?.message || `${res.status} ${res.statusText}`);
@@ -266,7 +260,7 @@ The page is rebuilt on every load by replaying all recorded run_js scripts, in o
             } finally {
                 if (responded) {
                     state.history = [...state.history, { role: 'user', content: prompt, task }, { role: 'assistant', content: summary || '(done)', task }].slice(-20);
-                    save();
+                    saveContent();
                 }
                 controller = null;
                 setRunning(false);
@@ -289,7 +283,7 @@ The page is rebuilt on every load by replaying all recorded run_js scripts, in o
         }
 
         function exportHtml() {
-            const json = JSON.stringify({ ...contentState(), savedAt: Date.now() }).replace(/</g, '\\u003c');
+            const json = JSON.stringify({ ...state, savedAt: Date.now() }).replace(/</g, '\\u003c');
             const html = pristine
                 .replace(/<[s]tyle[^>]*>[\s\S]*?<\/[s]tyle>/g, s => /tailwindcss|--tw-/.test(s) ? '' : s)
                 .replace(/(<script type="application\/json" id="ouroboros-state">)[\s\S]*?(<\/script>)/, (_, open, close) => open + json + close);
@@ -307,19 +301,16 @@ The page is rebuilt on every load by replaying all recorded run_js scripts, in o
             if (!confirm('Undo the last task and reload?')) return;
             state.mutations = state.mutations.filter(m => m.task !== task);
             state.history = state.history.filter(h => h.task !== task);
-            save();
+            saveContent();
             location.reload();
         }
 
         function reset() {
-            if (embedded.savedAt) {
-                if (!confirm('Reset to the exported snapshot? Everything done since the export is discarded; settings are kept.')) return;
-                localStorage.removeItem(SLOT);
-            } else {
-                if (!confirm('Reset the page to its pristine state? Mutations and history are cleared; settings are kept.')) return;
-                Object.assign(state, { mutations: [], history: [] });
-                save();
-            }
+            const message = embedded.savedAt
+                ? 'Reset to the exported snapshot? Everything done since the export is discarded; settings are kept.'
+                : 'Reset the page to its pristine state? Mutations and history are cleared; settings are kept.';
+            if (!confirm(message)) return;
+            localStorage.removeItem(CONTENT_KEY);
             location.reload();
         }
 
@@ -331,7 +322,7 @@ The page is rebuilt on every load by replaying all recorded run_js scripts, in o
                 if (!id) return;
                 state.mutations = state.mutations.filter(m => m.layout?.id !== id);
                 state.mutations.push({ layout: { id, x: +dataset.x || 0, y: +dataset.y || 0, w: style.width, h: style.height } });
-                save();
+                saveContent();
             };
             interact('.draggable')
                 .draggable({
@@ -400,7 +391,7 @@ The page is rebuilt on every load by replaying all recorded run_js scripts, in o
 
         function submit() {
             if (busy || controller) return;
-            if (!state.apiKey || !state.model) {
+            if (!settings.apiKey || !settings.model) {
                 $('settings-panel').open = true;
                 return log('error', 'Set your API key and model in Settings first.');
             }
@@ -412,11 +403,11 @@ The page is rebuilt on every load by replaying all recorded run_js scripts, in o
 
         function bindSettings() {
             const fields = { apiKey: 'api-key', apiBase: 'api-base', model: 'model' };
-            for (const [key, id] of Object.entries(fields)) $(id).value = state[key];
-            $('settings-panel').open = !state.apiKey;
+            for (const [key, id] of Object.entries(fields)) $(id).value = settings[key];
+            $('settings-panel').open = !settings.apiKey;
             $('save-btn').onclick = () => {
-                for (const [key, id] of Object.entries(fields)) state[key] = $(id).value.trim();
-                save();
+                for (const [key, id] of Object.entries(fields)) settings[key] = $(id).value.trim();
+                saveSettings();
                 log('system', 'Settings saved.');
                 updateBaseline();
             };
