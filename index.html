@@ -1,0 +1,580 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Ouroboros</title>
+    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E🐍%3C/text%3E%3C/svg%3E">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/interactjs/dist/interact.min.js"></script>
+</head>
+<body class="bg-gray-100 overflow-hidden relative w-screen h-screen font-sans text-gray-800" style="background-image: radial-gradient(#d1d5db 1px, transparent 1px); background-size: 20px 20px;">
+
+    <!-- GENESIS WINDOW: CORE -->
+    <div id="ouroboros-core" class="draggable resizable absolute top-10 left-10 w-[420px] h-[620px] max-h-[calc(100vh-5rem)] bg-white rounded-lg border border-gray-300 shadow-md touch-none select-none flex flex-col z-50" style="transform: translate(0px, 0px);" data-x="0" data-y="0">
+        <!-- Header -->
+        <div class="window-header cursor-move bg-gray-800 text-white px-4 py-2 rounded-t-lg flex justify-between items-center">
+            <h2 class="font-bold text-sm tracking-wide">OUROBOROS // CORE</h2>
+            <div class="flex items-center gap-3 text-gray-400">
+                <button id="undo-btn" title="Undo last task" class="hover:text-white transition-colors">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M9 15L3 9m0 0l6-6M3 9h12a6 6 0 010 12h-3"></path></svg>
+                </button>
+                <button id="reset-btn" title="Reset page (keeps settings and skills)" class="hover:text-white transition-colors">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0l3.181 3.183a8.25 8.25 0 0013.803-3.7M4.031 9.865a8.25 8.25 0 0113.803-3.7l3.181 3.182"></path></svg>
+                </button>
+                <button id="export-btn" title="Export HTML" class="hover:text-white transition-colors">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path></svg>
+                </button>
+            </div>
+        </div>
+
+        <!-- Token Monitor -->
+        <div class="bg-gray-100 px-4 py-1 text-xs text-gray-500 border-b border-gray-200 flex justify-between items-center">
+            <span>Context</span>
+            <span id="usage"></span>
+        </div>
+
+        <!-- Settings -->
+        <details id="settings-panel" class="border-b border-gray-200 text-xs">
+            <summary class="px-4 py-2 cursor-pointer text-gray-600 hover:bg-gray-50">Settings</summary>
+            <div class="px-4 pb-3 flex flex-col gap-2">
+                <input type="password" id="api-key" placeholder="API Key (sk-...)" class="w-full text-xs border border-gray-300 rounded px-2 py-1 focus:outline-none focus:border-blue-500">
+                <input type="text" id="api-base" placeholder="Base URL (default https://api.openai.com/v1)" class="w-full text-xs border border-gray-300 rounded px-2 py-1 focus:outline-none focus:border-blue-500">
+                <input type="text" id="model" placeholder="Model (e.g. gpt-5.6-sol)" class="w-full text-xs border border-gray-300 rounded px-2 py-1 focus:outline-none focus:border-blue-500">
+                <select id="api-style" class="w-full text-xs border border-gray-300 rounded px-2 py-1 bg-white focus:outline-none focus:border-blue-500">
+                    <option value="responses">Responses API (OpenAI, reasoning + tools)</option>
+                    <option value="chat">Chat Completions (most providers)</option>
+                </select>
+                <input type="text" id="scope" placeholder="Context scope: CSS/XPath sent in full each task (optional)" class="w-full text-xs border border-gray-300 rounded px-2 py-1 focus:outline-none focus:border-blue-500">
+                <button id="save-btn" class="w-full bg-blue-600 hover:bg-blue-700 text-white px-3 py-1 rounded transition-colors">Save Settings</button>
+            </div>
+        </details>
+
+        <!-- Skills -->
+        <details id="skills-panel" class="border-b border-gray-200 text-xs">
+            <summary class="px-4 py-2 cursor-pointer text-gray-600 hover:bg-gray-50">Skills <span id="skill-count" class="text-gray-400"></span></summary>
+            <div class="px-4 pb-3 flex flex-col gap-2">
+                <div id="skill-list" class="flex flex-col gap-1"></div>
+                <div id="skill-editor" class="hidden flex flex-col gap-2 border-t border-gray-200 pt-2">
+                    <input type="text" id="skill-name" placeholder="name (invoke with /name)" class="w-full text-xs border border-gray-300 rounded px-2 py-1 focus:outline-none focus:border-blue-500">
+                    <input type="text" id="skill-desc" placeholder="One-line description shown to the model" class="w-full text-xs border border-gray-300 rounded px-2 py-1 focus:outline-none focus:border-blue-500">
+                    <textarea id="skill-content" rows="6" placeholder="Instructions (Markdown)" class="w-full text-xs border border-gray-300 rounded px-2 py-1 focus:outline-none focus:border-blue-500 resize-y"></textarea>
+                    <div class="flex gap-2">
+                        <button id="skill-save" class="bg-blue-600 hover:bg-blue-700 text-white px-3 py-1 rounded transition-colors">Save</button>
+                        <button id="skill-delete" class="text-red-600 hover:underline px-2">Delete</button>
+                        <button id="skill-cancel" class="text-gray-500 hover:underline px-2">Cancel</button>
+                    </div>
+                </div>
+                <button id="new-skill-btn" class="self-start text-blue-600 hover:underline">+ New skill</button>
+            </div>
+        </details>
+
+        <!-- Activity Log -->
+        <div id="activity-log" class="flex-1 min-h-[100px] p-4 overflow-y-auto bg-white text-xs font-mono select-text"></div>
+
+        <!-- Terminal / Prompt Box -->
+        <div class="p-4 border-t border-gray-200 bg-gray-50 rounded-b-lg">
+            <textarea id="user-prompt" placeholder="Command the Ouroboros (e.g., 'Create a calculator', or '/skill-name ...')" class="w-full text-sm border border-gray-300 rounded p-2 mb-2 focus:outline-none focus:border-blue-500 min-h-[80px] resize-none"></textarea>
+            <div class="flex justify-between items-center">
+                <span class="text-xs text-gray-400">Ctrl/⌘+Enter to send</span>
+                <button id="execute-btn" class="bg-gray-900 hover:bg-gray-800 text-white text-sm font-medium px-4 py-2 rounded transition-colors">Take a Bite 🐍</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- PAGE FOOTER -->
+    <div class="fixed bottom-4 left-0 w-full text-center z-40 px-4 pointer-events-none">
+        <span class="text-sm text-gray-400 pointer-events-auto">
+            <a href="https://ki-seki.github.io/posts/260322-ouroboros/" target="_blank" class="hover:text-gray-600 transition-colors">About Ouroboros</a>
+            <span class="px-1">|</span>
+            <a href="https://github.com/Ki-Seki/ki-seki.github.io/blob/main/static/features/ouroboros/index.html" target="_blank" class="hover:text-gray-600 transition-colors">Source Code</a>
+        </span>
+    </div>
+
+    <!-- EMBEDDED SYSTEM PROMPT (editable by users) -->
+    <script type="text/plain" id="ouroboros-system_prompt">
+## Role
+You are Ouroboros, a self-editing web page. The user asks for features; you build them by running JavaScript against the live DOM of this very page, using the tools below. Work as an agent: orient, act, verify, then stop.
+
+## Tools
+- read_dom(selector, outline): read part of the page. CSS selector, or XPath starting with "/". Use outline=true first to orient cheaply; fetch full HTML only for the parts you need.
+- eval_js(code): read-only JavaScript (computed styles, element state, try a fetch). Not recorded. Never mutate here.
+- run_js(code): mutate the page. Recorded and replayed in order on every load. Errors are reported back and the failed script is not recorded.
+- load_skill(name) / save_skill(name, description, content): read or write reusable instructions. Available skills are listed below.
+
+`code` is the body of an async function: `return` a string or JSON-able value to see it (return `.outerHTML` for elements); use `await import('https://esm.sh/pkg')` for libraries. Top-level `const` is local to the call; share state via `window`.
+The page outline below was captured when the task started; use read_dom for anything current.
+
+## Persistence
+The page is rebuilt on every load by replaying all recorded run_js scripts, in order, from the pristine page. Therefore:
+- Each script must be self-contained and succeed when replayed after the ones before it. Never rely on state from eval_js or from a failed script.
+- Build UI and attach its behavior (listeners, timers) in the same script, so both come back on reload.
+- Make scripts idempotent: remove your existing element (`document.getElementById('x')?.remove()`) before recreating it. To change something built earlier, write a new script that replaces it.
+- A failed script may have partially changed the DOM: clean up and write a full corrected script.
+
+## Rules
+- Never modify or remove #ouroboros-core or the ouroboros-* script blocks. They are the harness that runs you.
+- Build UI as floating windows: `<div id="..." class="draggable resizable absolute ...">` containing a `.window-header` child. Dragging, resizing and click-to-focus then work automatically. Use Tailwind classes. Keep windows clear of the top-left, where the core lives.
+- Keep code compact. No large inline images or data URIs.
+- Verify your work with read_dom or eval_js before finishing. When done, reply with a one-line summary and no tool calls. Ask the user only when the request is truly ambiguous.
+- Web access: `fetch('https://r.jina.ai/' + url)` returns readable Markdown; `fetch('https://corsproxy.io/?url=' + encodeURIComponent(url))` returns raw HTML.
+- Users may edit this prompt to customize you.
+    </script>
+
+    <!-- EMBEDDED STATE (filled on export so the file carries its history, mutations and skills) -->
+    <script type="application/json" id="ouroboros-state">{}</script>
+
+    <!-- MAIN APPLICATION LOGIC -->
+    <script type="module">
+        // --- CONSTANTS ---
+        const MAX_STEPS = 40;
+        const HARNESS = '#ouroboros-core, #ouroboros-system_prompt, #ouroboros-state';
+        const AsyncFunction = Object.getPrototypeOf(async function () {}).constructor;
+        const $ = id => document.getElementById(id);
+
+        // --- STATE ---
+        // Settings belong to the user and stay in this browser. Content (history, mutations, skills) is what the
+        // page is made of: it is written into exported files, and each exported snapshot continues in its own slot.
+        // The pristine page is captured before any mutation is replayed; export = pristine + content.
+        const pristine = '<!DOCTYPE html>\n' + document.documentElement.outerHTML;
+        const embedded = JSON.parse($('ouroboros-state').textContent || '{}');
+        const SLOT = `ouroboros:${embedded.savedAt || 'live'}`;
+        const load = key => { try { return JSON.parse(localStorage.getItem(key) || 'null'); } catch { return null; } };
+        const state = {
+            apiKey: localStorage.getItem('ouroboros_api_key') || '',
+            apiBase: localStorage.getItem('ouroboros_api_base') || '',
+            model: localStorage.getItem('ouroboros_model_name') || '',
+            api: 'responses', scope: '',
+            ...load('ouroboros:settings'),
+            history: [], mutations: [], skills: [],
+            ...embedded, ...load(SLOT),
+        };
+        const contentState = () => { const { apiKey, apiBase, model, api, scope, savedAt, ...rest } = state; return rest; };
+        function save() {
+            const { apiKey, apiBase, model, api, scope } = state;
+            localStorage.setItem('ouroboros:settings', JSON.stringify({ apiKey, apiBase, model, api, scope }));
+            localStorage.setItem(SLOT, JSON.stringify(contentState()));
+        }
+
+        let controller = null;   // AbortController of the running task
+        let busy = true;         // true until replay finishes
+        let editingSkill = -1;
+        const runtimeErrors = [];
+        const noteError = msg => { runtimeErrors.push(msg); if (runtimeErrors.length > 10) runtimeErrors.shift(); };
+        addEventListener('error', e => noteError(`${e.message} (${e.filename?.split('/').pop() || 'inline'}:${e.lineno})`));
+        addEventListener('unhandledrejection', e => noteError(`Unhandled rejection: ${e.reason?.message || e.reason}`));
+
+        // --- DOM ACCESS ---
+        function resolve(selector) {
+            if (!/^\(*\//.test(selector)) return [...document.querySelectorAll(selector)];
+            const r = document.evaluate(selector, document, null, XPathResult.ORDERED_NODE_SNAPSHOT_TYPE, null);
+            return Array.from({ length: r.snapshotLength }, (_, i) => r.snapshotItem(i));
+        }
+
+        function htmlOf(el) {
+            const clone = el.cloneNode(true);
+            clone.querySelectorAll(HARNESS).forEach(n => n.replaceChildren(document.createComment(' harness, omitted ')));
+            clone.querySelectorAll('style').forEach(n => /tailwindcss|--tw-/.test(n.textContent) && n.remove());
+            return clone.outerHTML;
+        }
+
+        // Compact tree: tag#id.classes "text", repeated siblings collapsed as ×N.
+        function outlineOf(el, depth = 0, lines = []) {
+            const sig = n => n.tagName.toLowerCase() + (n.id ? '#' + n.id : '') + [...n.classList].slice(0, 4).map(c => '.' + c).join('');
+            const harness = el.matches(HARNESS);
+            const text = harness || el.childElementCount ? '' : el.textContent.trim().replace(/\s+/g, ' ').slice(0, 40);
+            lines.push('  '.repeat(depth) + sig(el) + (text ? ` "${text}"` : '') + (harness ? ' (harness)' : ''));
+            if (harness) return lines;
+            const kids = [...el.children];
+            for (let i = 0; i < kids.length; i++) {
+                let n = 1;
+                while (!kids[i].id && i + n < kids.length && sig(kids[i + n]) === sig(kids[i])) n++;
+                const at = lines.length;
+                outlineOf(kids[i], depth + 1, lines);
+                if (n > 1) { lines[at] += ` ×${n}`; i += n - 1; }
+            }
+            return lines;
+        }
+
+        const render = (node, outline) => node.nodeType !== 1 ? node.textContent : outline ? outlineOf(node).join('\n') : htmlOf(node);
+        const clip = (s, n) => s.length > n ? s.slice(0, n) + `\n… [${s.length - n} more chars]` : s;
+        const show = v => { try { return v === undefined ? 'ok' : typeof v === 'string' ? v : (JSON.stringify(v, null, 1) ?? String(v)); } catch { return String(v); } };
+        const runJs = async code => show(await new AsyncFunction(code)());
+
+        // --- TOOLS ---
+        const CODE_SCHEMA = { type: 'object', properties: { code: { type: 'string', description: 'Body of an async function' } }, required: ['code'] };
+        const TOOLS = [
+            {
+                name: 'read_dom',
+                description: 'Read part of the page as HTML. With outline=true, return a compact tree (tag#id.classes "text") instead. Use outline first to orient, then read only what you need.',
+                parameters: { type: 'object', properties: { selector: { type: 'string', description: 'CSS selector, or XPath starting with "/"' }, outline: { type: 'boolean' } }, required: ['selector'] },
+                run: ({ selector, outline }) => {
+                    const nodes = resolve(selector);
+                    return nodes.length ? clip(nodes.map(n => render(n, outline)).join('\n\n'), 30000) : `No element matches ${selector}`;
+                },
+            },
+            {
+                name: 'eval_js',
+                description: 'Evaluate read-only JavaScript and return the result. Not recorded; never mutate the page here.',
+                parameters: CODE_SCHEMA,
+                run: ({ code }) => runJs(code),
+            },
+            {
+                name: 'run_js',
+                description: 'Mutate the page with JavaScript. Recorded and replayed in order on every page load, so it must be self-contained and idempotent. Failed scripts are not recorded.',
+                parameters: CODE_SCHEMA,
+                run: async ({ code }, task) => { const out = await runJs(code); state.mutations.push({ task, code }); save(); return out; },
+            },
+            {
+                name: 'load_skill',
+                description: 'Return the full instructions of a skill listed in the system prompt.',
+                parameters: { type: 'object', properties: { name: { type: 'string' } }, required: ['name'] },
+                run: ({ name }) => state.skills.find(s => s.name === name)?.content ?? `No skill named "${name}"`,
+            },
+            {
+                name: 'save_skill',
+                description: 'Create or update a reusable skill (Markdown instructions) for future tasks, e.g. when the user asks you to remember a workflow.',
+                parameters: { type: 'object', properties: { name: { type: 'string' }, description: { type: 'string' }, content: { type: 'string' } }, required: ['name', 'description', 'content'] },
+                run: skill => `Skill "${upsertSkill(skill).name}" saved.`,
+            },
+        ];
+        const toolSchemas = () => TOOLS.map(({ run, ...schema }) => schema);
+
+        async function runTool(call, task) {
+            const tool = TOOLS.find(t => t.name === call.name);
+            if (!tool) return `Error: unknown tool ${call.name}`;
+            let args;
+            try { args = JSON.parse(call.arguments || '{}'); } catch { return 'Error: arguments are not valid JSON'; }
+            const done = logTool(call.name, args);
+            try {
+                const out = await tool.run(args, task);
+                done(out);
+                return out;
+            } catch (e) {
+                const at = String(e?.stack).match(/<anonymous>:(\d+):(\d+)/);   // AsyncFunction adds 2 header lines
+                const msg = `Error: ${e?.message ?? e}${at ? ` (line ${at[1] - 2}, col ${at[2]})` : ''}`;
+                done(msg, true);
+                return msg;
+            }
+        }
+
+        // --- MODEL ---
+        async function post(path, body, signal) {
+            const base = (state.apiBase || 'https://api.openai.com/v1').replace(/\/+$/, '');
+            const res = await fetch(base + path, {
+                method: 'POST', signal,
+                headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${state.apiKey}`, 'HTTP-Referer': 'https://ki-seki.github.io/features/ouroboros/', 'X-Title': 'Ouroboros' },
+                body: JSON.stringify(body),
+            });
+            const data = await res.json().catch(() => ({}));
+            if (!res.ok) throw new Error(data.error?.message || `${res.status} ${res.statusText}`);
+            return data;
+        }
+
+        // Conversation items use the Responses API shape; each backend returns
+        // { output: items to append, calls: function calls, text: assistant text, usage: { input, output } }.
+        const textOf = content => typeof content === 'string' ? content : content.map(c => c.text || '').join('');
+        const backends = {
+            async responses(instructions, input, signal) {
+                const r = await post('/responses', { model: state.model, instructions, input, tools: toolSchemas().map(t => ({ type: 'function', strict: false, ...t })) }, signal);
+                return {
+                    output: r.output,
+                    calls: r.output.filter(o => o.type === 'function_call'),
+                    text: r.output.filter(o => o.type === 'message').map(m => textOf(m.content)).join('\n'),
+                    usage: { input: r.usage?.input_tokens, output: r.usage?.output_tokens },
+                };
+            },
+            async chat(system, input, signal) {
+                const messages = [{ role: 'system', content: system }];
+                for (const it of input) {
+                    if (it.type === 'function_call') {
+                        const tc = { id: it.call_id, type: 'function', function: { name: it.name, arguments: it.arguments } };
+                        const last = messages.at(-1);
+                        if (last.role === 'assistant') (last.tool_calls ??= []).push(tc);
+                        else messages.push({ role: 'assistant', content: null, tool_calls: [tc] });
+                    } else if (it.type === 'function_call_output') {
+                        messages.push({ role: 'tool', tool_call_id: it.call_id, content: it.output });
+                    } else if (it.role) {
+                        messages.push({ role: it.role, content: textOf(it.content) });
+                    }
+                }
+                const r = await post('/chat/completions', { model: state.model, messages, tools: toolSchemas().map(t => ({ type: 'function', function: t })) }, signal);
+                const m = r.choices[0].message;
+                const output = m.content ? [{ role: 'assistant', content: m.content }] : [];
+                for (const tc of m.tool_calls || []) output.push({ type: 'function_call', call_id: tc.id, name: tc.function.name, arguments: tc.function.arguments });
+                return { output, calls: output.filter(o => o.type === 'function_call'), text: m.content || '', usage: { input: r.usage?.prompt_tokens, output: r.usage?.completion_tokens } };
+            },
+        };
+
+        function systemPrompt() {
+            const parts = [$('ouroboros-system_prompt').textContent.trim()];
+            if (state.skills.length) parts.push('## Skills\n' + state.skills.map(s => `- ${s.name}: ${s.description}`).join('\n'));
+            parts.push('## Current page (outline)\n' + clip(outlineOf(document.body).join('\n'), 12000));
+            if (state.scope) parts.push(`## Scope "${state.scope}" (full HTML)\n` + (clip(resolve(state.scope).map(n => render(n)).join('\n'), 40000) || '(no match)'));
+            if (runtimeErrors.length) parts.push('## Runtime errors since the last task\n' + runtimeErrors.map(e => '- ' + e).join('\n'));
+            return parts.join('\n\n');
+        }
+
+        function expandSkill(prompt) {
+            const m = prompt.match(/^\/(\S+)\s*([\s\S]*)/);
+            const skill = m && state.skills.find(s => s.name === m[1]);
+            return skill ? `Apply the skill "${skill.name}":\n${skill.content}\n\nTask: ${m[2] || '(follow the skill)'}` : prompt;
+        }
+
+        // --- AGENT LOOP ---
+        async function runTask(prompt) {
+            controller = new AbortController();
+            setRunning(true);
+            log('user', prompt);
+            const task = Date.now();
+            let taskTokens = 0, summary = '', responded = false;
+            try {
+                const instructions = systemPrompt();
+                runtimeErrors.length = 0;
+                const input = [...state.history.map(({ role, content }) => ({ role, content })), { role: 'user', content: expandSkill(prompt) }];
+                for (let step = 0; ; step++) {
+                    if (step === MAX_STEPS) { summary = `Stopped after ${MAX_STEPS} steps.`; log('error', summary); break; }
+                    const { output, calls, text, usage } = await backends[state.api](instructions, input, controller.signal);
+                    responded = true;
+                    taskTokens += (usage.input || 0) + (usage.output || 0);
+                    els.usage.textContent = `in ${fmt(usage.input)} · out ${fmt(usage.output)} · task ${fmt(taskTokens)}`;
+                    input.push(...output);
+                    if (text) log('assistant', text);
+                    if (!calls.length) { summary = text; break; }
+                    for (const call of calls) {
+                        if (controller.signal.aborted) throw new DOMException('Aborted', 'AbortError');
+                        input.push({ type: 'function_call_output', call_id: call.call_id, output: await runTool(call, task) });
+                    }
+                }
+            } catch (e) {
+                summary = e.name === 'AbortError' ? 'Stopped by user.' : `Error: ${e.message}`;
+                log(e.name === 'AbortError' ? 'system' : 'error', summary);
+            } finally {
+                if (responded) {
+                    state.history = [...state.history, { role: 'user', content: prompt, task }, { role: 'assistant', content: summary || '(done)', task }].slice(-20);
+                    save();
+                }
+                controller = null;
+                setRunning(false);
+                if (taskTokens) lastTaskUsage = `last task ${fmt(taskTokens)} · `;
+                updateBaseline();
+            }
+        }
+
+        // --- PERSISTENCE ---
+        // The log holds model scripts ({ task, code }) and user window moves ({ layout }); order resolves conflicts.
+        async function replay() {
+            let failed = 0;
+            for (const m of state.mutations) {
+                if (m.layout) { applyLayout(m.layout); continue; }
+                try { await new AsyncFunction(m.code)(); }
+                catch (e) { failed++; console.error('Replay failed:', e, m.code); noteError(`Replay of a recorded script failed: ${e.message}`); }
+            }
+            const n = state.mutations.filter(m => m.code).length;
+            if (n) log('system', `Replayed ${n} mutation(s)${failed ? `, ${failed} failed (see console)` : ''}.`);
+        }
+
+        function exportHtml() {
+            const json = JSON.stringify({ ...contentState(), savedAt: Date.now() }).replace(/</g, '\\u003c');
+            const html = pristine
+                .replace(/<[s]tyle[^>]*>[\s\S]*?<\/[s]tyle>/g, s => /tailwindcss|--tw-/.test(s) ? '' : s)
+                .replace(/(<script type="application\/json" id="ouroboros-state">)[\s\S]*?(<\/script>)/, (_, open, close) => open + json + close);
+            const a = document.createElement('a');
+            a.href = URL.createObjectURL(new Blob([html], { type: 'text/html' }));
+            a.download = `ouroboros_${new Date().toLocaleString('sv').replace(/[: ]/g, '-')}.html`;
+            a.click();
+            URL.revokeObjectURL(a.href);
+            log('system', 'Exported successfully.');
+        }
+
+        function undo() {
+            const task = state.history.at(-1)?.task;
+            if (task === undefined) return log('system', 'Nothing to undo.');
+            if (!confirm('Undo the last task and reload?')) return;
+            state.mutations = state.mutations.filter(m => m.task !== task);
+            state.history = state.history.filter(h => h.task !== task);
+            save();
+            location.reload();
+        }
+
+        function reset() {
+            if (embedded.savedAt) {
+                if (!confirm('Reset to the exported snapshot? Everything done since the export is discarded; settings are kept.')) return;
+                localStorage.removeItem(SLOT);
+            } else {
+                if (!confirm('Reset the page to its pristine state? Mutations and history are cleared; settings and skills are kept.')) return;
+                Object.assign(state, { mutations: [], history: [] });
+                save();
+            }
+            location.reload();
+        }
+
+        // --- WINDOWS ---
+        const move = (el, x, y) => { el.style.transform = `translate(${x}px, ${y}px)`; Object.assign(el.dataset, { x, y }); };
+
+        function setupWindows() {
+            const remember = ({ id, dataset, style }) => {
+                if (!id) return;
+                state.mutations = state.mutations.filter(m => m.layout?.id !== id);
+                state.mutations.push({ layout: { id, x: +dataset.x || 0, y: +dataset.y || 0, w: style.width, h: style.height } });
+                save();
+            };
+            interact('.draggable')
+                .draggable({
+                    allowFrom: '.window-header',
+                    listeners: { move: e => move(e.target, (+e.target.dataset.x || 0) + e.dx, (+e.target.dataset.y || 0) + e.dy), end: e => remember(e.target) },
+                })
+                .resizable({
+                    edges: { right: true, bottom: true },
+                    listeners: { move: e => Object.assign(e.target.style, { width: `${e.rect.width}px`, height: `${e.rect.height}px` }), end: e => remember(e.target) },
+                });
+            let z = 50;
+            document.addEventListener('pointerdown', e => { const w = e.target.closest('.draggable'); if (w) w.style.zIndex = ++z; });
+        }
+
+        function applyLayout({ id, x, y, w, h }) {
+            const el = $(id);
+            if (!el) return;
+            move(el, x, y);
+            if (w) el.style.width = w;
+            if (h) el.style.height = h;
+        }
+
+        // --- UI ---
+        const els = { log: $('activity-log'), prompt: $('user-prompt'), usage: $('usage'), btn: $('execute-btn') };
+        const esc = s => String(s).replace(/[&<>]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]));
+        const fmt = n => n == null ? '?' : n >= 1000 ? (n / 1000).toFixed(1) + 'k' : String(Math.round(n));
+        const LABELS = { user: ['USER', 'text-blue-600'], assistant: ['OUROBOROS', 'text-green-600'], system: ['SYSTEM', 'text-gray-500'], error: ['ERROR', 'text-red-600'] };
+
+        function log(kind, text) {
+            const [label, color] = LABELS[kind];
+            els.log.insertAdjacentHTML('beforeend', `<div class="mb-2"><span class="text-gray-400">[${new Date().toLocaleTimeString()}]</span> <span class="font-bold ${color}">${label}:</span> <span class="whitespace-pre-wrap">${esc(text)}</span></div>`);
+            els.log.scrollTop = els.log.scrollHeight;
+        }
+
+        function logTool(name, args) {
+            const el = document.createElement('details');
+            el.className = 'mb-2 text-gray-600';
+            const label = [args.selector, args.outline && '(outline)', args.name].filter(Boolean).join(' ');
+            el.innerHTML = `<summary class="cursor-pointer"><span class="font-bold text-purple-600">${name}</span> <span class="text-gray-400">${esc(label)}</span> <span class="status"></span></summary>`
+                + (args.code ? `<pre class="whitespace-pre-wrap bg-gray-50 border border-gray-200 rounded p-2 mt-1">${esc(args.code)}</pre>` : '')
+                + `<pre class="whitespace-pre-wrap text-gray-500 mt-1 max-h-40 overflow-y-auto">…</pre>`;
+            els.log.append(el);
+            els.log.scrollTop = els.log.scrollHeight;
+            return (result, failed) => {
+                const status = el.querySelector('.status');
+                status.textContent = failed ? '✗' : '✓';
+                status.className = failed ? 'text-red-600' : 'text-green-600';
+                el.lastElementChild.textContent = clip(result, 1500);
+            };
+        }
+
+        let lastTaskUsage = '';
+        function updateBaseline() {
+            if (controller) return;
+            try { els.usage.textContent = `${lastTaskUsage}~${fmt(systemPrompt().length / 4)} tok baseline`; }
+            catch (e) { els.usage.textContent = `invalid scope: ${e.message}`; }
+        }
+
+        function setRunning(on) {
+            els.btn.textContent = on ? 'Stop ■' : 'Take a Bite 🐍';
+            els.btn.classList.toggle('bg-red-700', on);
+            els.btn.classList.toggle('hover:bg-red-600', on);
+            els.btn.classList.toggle('bg-gray-900', !on);
+            els.btn.classList.toggle('hover:bg-gray-800', !on);
+        }
+
+        function submit() {
+            if (busy || controller) return;
+            if (!state.apiKey || !state.model) {
+                $('settings-panel').open = true;
+                return log('error', 'Set your API key and model in Settings first.');
+            }
+            const prompt = els.prompt.value.trim();
+            if (!prompt) return;
+            els.prompt.value = '';
+            runTask(prompt);
+        }
+
+        function bindSettings() {
+            const fields = { apiKey: 'api-key', apiBase: 'api-base', model: 'model', api: 'api-style', scope: 'scope' };
+            for (const [key, id] of Object.entries(fields)) $(id).value = state[key];
+            $('settings-panel').open = !state.apiKey;
+            $('save-btn').onclick = () => {
+                for (const [key, id] of Object.entries(fields)) state[key] = $(id).value.trim();
+                save();
+                log('system', 'Settings saved.');
+                updateBaseline();
+            };
+        }
+
+        function renderSkills() {
+            $('skill-count').textContent = state.skills.length ? `(${state.skills.length})` : '';
+            $('skill-list').innerHTML = state.skills.map((s, i) =>
+                `<button data-i="${i}" class="text-left truncate hover:text-blue-600"><b>/${esc(s.name)}</b> <span class="text-gray-500">${esc(s.description)}</span></button>`
+            ).join('') || '<span class="text-gray-400">Skills are reusable instructions: the model loads them when relevant, or you invoke one with /name.</span>';
+        }
+
+        function editSkill(i) {
+            editingSkill = i;
+            const s = state.skills[i] || { name: '', description: '', content: '' };
+            $('skill-name').value = s.name;
+            $('skill-desc').value = s.description;
+            $('skill-content').value = s.content;
+            $('skill-delete').classList.toggle('hidden', i < 0);
+            $('skill-editor').classList.remove('hidden');
+        }
+
+        function upsertSkill({ name, description, content }) {
+            const skill = { name: name.trim().replace(/\s+/g, '-'), description, content };   // /name invocation needs a whitespace-free name
+            const i = state.skills.findIndex(s => s.name === skill.name);
+            i < 0 ? state.skills.push(skill) : state.skills.splice(i, 1, skill);
+            save(); renderSkills(); return skill;
+        }
+
+        function bindSkills() {
+            const close = () => $('skill-editor').classList.add('hidden');
+            $('skill-list').onclick = e => { const b = e.target.closest('button'); if (b) editSkill(+b.dataset.i); };
+            $('new-skill-btn').onclick = () => editSkill(-1);
+            $('skill-cancel').onclick = close;
+            $('skill-delete').onclick = () => { state.skills.splice(editingSkill, 1); save(); renderSkills(); close(); };
+            $('skill-save').onclick = () => {
+                const name = $('skill-name').value.trim();
+                if (!name) return;
+                if (editingSkill >= 0) state.skills.splice(editingSkill, 1);
+                upsertSkill({ name, description: $('skill-desc').value.trim(), content: $('skill-content').value.trim() });
+                close();
+            };
+        }
+
+        // --- INITIALIZATION ---
+        async function init() {
+            bindSettings();
+            bindSkills();
+            renderSkills();
+            $('export-btn').onclick = exportHtml;
+            $('reset-btn').onclick = reset;
+            $('undo-btn').onclick = undo;
+            els.btn.onclick = () => controller ? controller.abort() : submit();
+            els.prompt.addEventListener('keydown', e => { if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') submit(); });
+            setupWindows();
+            for (const h of state.history) log(h.role, h.content);
+
+            await replay();
+            busy = false;
+
+            const core = $('ouroboros-core');
+            let timeout;
+            new MutationObserver(mutations => {
+                if (mutations.every(m => core.contains(m.target))) return;
+                clearTimeout(timeout);
+                timeout = setTimeout(updateBaseline, 500);
+            }).observe(document.body, { childList: true, subtree: true, attributes: true, characterData: true });
+            updateBaseline();
+            log('system', 'Ouroboros ready.');
+        }
+
+        init();
+    </script>
+</body>
+</html>
