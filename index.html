@@ -10,7 +10,7 @@
     <style>
         #desktop { position: absolute; inset: 0 0 80px; overflow: auto; overscroll-behavior: contain; }
         body { background: #eeeee8; font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, sans-serif; }
-        #window-layer { position: relative; width: 100%; min-height: 100%; }
+        #window-layer { position: relative; width: 100%; min-width: 100%; min-height: 100%; }
         #window-layer > .desktop-window, #desktop-dock button { --tile: #375d58; --tint: #e5eeeb; --line: #dce2dc; --muted: #68766f; --accent: var(--tile); }
         #window-layer > .desktop-window { position: absolute; display: flex; flex-direction: column; box-sizing: border-box; overflow: hidden; color: #293b34; background: #fffefb; font-size: 14px; line-height: 1.5; border: 1px solid var(--line); border-radius: 0; box-shadow: none; }
         #window-layer > .desktop-window[hidden] { display: none !important; }
@@ -620,8 +620,9 @@ The page is rebuilt on every load by replaying all recorded run_js scripts, in o
                 return;
             }
             const visible = [...windows.values()].filter(w => !w.minimized && !w.maximized);
-            const right = Math.max(desktop.clientWidth, ...visible.map(w => w.rect.x + w.rect.w + EDGE));
-            const bottom = Math.max(desktop.clientHeight, ...visible.map(w => w.rect.y + w.rect.h + EDGE));
+            // CSS handles the viewport minimum without feeding scrollbar-dependent client sizes back into the canvas.
+            const right = Math.ceil(Math.max(0, ...visible.map(w => w.rect.x + w.rect.w + EDGE)));
+            const bottom = Math.ceil(Math.max(0, ...visible.map(w => w.rect.y + w.rect.h + EDGE)));
             if (layer.style.width !== `${right}px`) layer.style.width = `${right}px`;
             if (layer.style.height !== `${bottom}px`) layer.style.height = `${bottom}px`;
         }
