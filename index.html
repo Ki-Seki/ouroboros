@@ -157,8 +157,12 @@
                 <div class="flex flex-wrap gap-2">
                     <button id="arrange-settings-btn" type="button" class="ui-button is-secondary">Arrange tiles</button>
                     <button id="export-btn" type="button" class="ui-button is-secondary">Export HTML</button>
+                    <button id="import-btn" type="button" class="ui-button is-secondary">Import HTML</button>
+                    <button id="import-backup-btn" type="button" class="ui-button is-secondary" hidden>Restore backup</button>
                     <button id="reset-btn" type="button" class="ui-button is-secondary is-danger">Reset canvas…</button>
                 </div>
+                <input id="import-file" type="file" accept=".html,.htm,text/html" hidden>
+                <p class="text-xs text-[var(--muted)]">Exports include saved tile data. Older tiles may need an update to save their content.</p>
             </section>
         </div>
     </section>
@@ -186,6 +190,8 @@ The page is rebuilt on every load by replaying all recorded run_js scripts, in o
 - Build UI and attach its behavior (listeners, timers) in the same script, so both come back on reload.
 - Make scripts idempotent: remove your existing element (`document.getElementById('x')?.remove()`) before recreating it. To change something built earlier, write a new script that replaces it.
 - A failed script may have partially changed the DOM: clean up and write a full corrected script.
+- Persist every tile's user data with `ouroboros.getState(tileId, defaultValue)` and `ouroboros.setState(tileId, value)`. Values must be JSON data. The getter returns a copy; save after user changes and render from that data. For example, read `{count: 0}` when creating a counter, then save the updated count in its click handler. This preserves content across reloads, exports, imports and history restore. Use this API for notes, tasks, editor text, progress and other user-owned content; do not store that content in localStorage, sessionStorage, IndexedDB or only in a closure. Keep the tile id stable when replacing it and preserve its existing data. The host restores saved data before replay; do not replace the `ouroboros` API.
+- When updating an older tile, inspect its current content and existing storage first, then migrate that data with `setState` before replacing its UI. Always initialize the rebuilt view from `getState`.
 
 ## Rules
 - Never modify or remove #ouroboros-core, #ouroboros-settings, #desktop-dock, the desktop containers, or the ouroboros-* script blocks. You may append windows to #window-layer.
@@ -210,7 +216,7 @@ The page is rebuilt on every load by replaying all recorded run_js scripts, in o
         const $ = id => document.getElementById(id);
 
         // --- STATE ---
-        // Settings stay in the browser; state contains only the history and mutations carried by exports.
+        // Settings and the pre-import backup stay in the browser. Exports carry history and the code/layout/data journal.
         // Each exported snapshot continues in its own local storage slot.
         // The pristine page is captured before any mutation is replayed; export = pristine + content.
         const pristine = '<!DOCTYPE html>\n' + document.documentElement.outerHTML;
@@ -229,15 +235,37 @@ The page is rebuilt on every load by replaying all recorded run_js scripts, in o
             history: saved.history,
             mutations: saved.mutations,
         };
+        const importBackup = saved.importBackup ?? null;
         const saveSettings = () => localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings));
-        const saveContent = () => localStorage.setItem(CONTENT_KEY, JSON.stringify(state));
+        const saveContent = () => localStorage.setItem(CONTENT_KEY, JSON.stringify({ ...state, importBackup }));
 
         let controller = null;   // AbortController of the running task
         let busy = true;         // true until replay finishes
+        let importing = false, dataBoundary = state.mutations.length;
+        const tileData = new Map();
         const runtimeErrors = [];
         const noteError = msg => { runtimeErrors.push(msg); if (runtimeErrors.length > 10) runtimeErrors.shift(); };
         addEventListener('error', e => noteError(`${e.message} (${e.filename?.split('/').pop() || 'inline'}:${e.lineno})`));
         addEventListener('unhandledrejection', e => noteError(`Unhandled rejection: ${e.reason?.message || e.reason}`));
+
+        // Data is restored before scripts run; replayed setup code cannot overwrite saved user content.
+        const copyData = value => JSON.parse(JSON.stringify(value));
+        window.ouroboros = Object.freeze({
+            getState(id, fallback = {}) { return copyData(tileData.has(id) ? tileData.get(id) : fallback); },
+            setState(id, value) {
+                if (busy) return;
+                if (typeof id !== 'string' || !id.trim()) throw new Error('A tile id is required to save data.');
+                const data = { id, value: copyData(value) };
+                if (JSON.stringify(tileData.get(id)) === JSON.stringify(data.value)) return;
+                const previous = state.mutations.findLastIndex(m => m.data?.id === id);
+                // Coalesce edits after the latest checkpoint without changing any saved history version.
+                if (previous >= dataBoundary) state.mutations[previous] = { data };
+                else state.mutations.push({ data });
+                tileData.set(id, data.value);
+                try { saveContent(); }
+                catch (e) { log('error', `Could not save tile data locally: ${e.message}. Export HTML to keep a copy.`); }
+            },
+        });
 
         // --- DOM ACCESS ---
         function htmlOf(el) {
@@ -345,6 +373,7 @@ The page is rebuilt on every load by replaying all recorded run_js scripts, in o
             setRunning(true);
             const task = Date.now();
             const before = state.mutations.length;
+            dataBoundary = before;
             log('user', prompt, task);
             const taskUsage = { input: 0, output: 0 };
             settings.usage.lastTask = null;
@@ -398,12 +427,16 @@ The page is rebuilt on every load by replaying all recorded run_js scripts, in o
         // Keep scripts and changed layouts in order. History revisions point into this append-only log.
         function saveTask(task, prompt, summary, before) {
             state.history = [...state.history, { role: 'user', content: prompt, task, before }, { role: 'assistant', content: summary, task, revision: state.mutations.length }].slice(-20);
+            dataBoundary = state.mutations.length;
             saveContent();
         }
 
         async function replay() {
             let failed = 0;
+            tileData.clear();
+            for (const m of state.mutations) if (m.data) tileData.set(m.data.id, m.data.value);
             for (const m of state.mutations) {
+                if (m.data) continue;
                 if (m.layout) { applyLayout(m.layout); continue; }
                 try { await new AsyncFunction(m.code)(); }
                 catch (e) { failed++; console.error('Replay failed:', e, m.code); noteError(`Replay of a recorded script failed: ${e.message}`); }
@@ -414,6 +447,8 @@ The page is rebuilt on every load by replaying all recorded run_js scripts, in o
         }
 
         function exportHtml() {
+            if (busy || controller || importing) return;
+            syncWindows(true); rememberWindows(false);
             const json = JSON.stringify({ ...state, savedAt: Date.now() }).replace(/</g, '\\u003c');
             const html = pristine
                 .replace(/<[s]tyle[^>]*>[\s\S]*?<\/[s]tyle>/g, s => /tailwindcss|--tw-/.test(s) ? '' : s)
@@ -426,13 +461,65 @@ The page is rebuilt on every load by replaying all recorded run_js scripts, in o
             log('system', 'Exported successfully.');
         }
 
-        function restoreVersion(revision, historyLength) {
-            if (!Number.isInteger(revision) || busy || controller) return;
-            if (!confirm('Restore this version? Later tasks and window changes will be removed. Settings and token usage are kept.')) return;
-            state.mutations = state.mutations.slice(0, revision);
-            state.history = state.history.slice(0, historyLength);
-            saveContent();
+        function readImport(html) {
+            const match = html.match(/<script\b(?=[^>]*\sid=["']ouroboros-state["'])(?=[^>]*\stype=["']application\/json["'])[^>]*>([\s\S]*?)<\/script\s*>/i);
+            if (!match) throw new Error('Choose an HTML file exported by Ouroboros.');
+            const data = JSON.parse(match[1]);
+            if (!data || !Number.isFinite(data.savedAt) || !Array.isArray(data.history) || !Array.isArray(data.mutations)) throw new Error('Invalid workspace data.');
+            const position = n => Number.isInteger(n) && n >= 0 && n <= data.mutations.length;
+            for (const h of data.history) {
+                if (!h || !['user', 'assistant'].includes(h.role) || typeof h.content !== 'string' || !Number.isFinite(h.task)
+                    || (h.before !== undefined && !position(h.before)) || (h.revision !== undefined && !position(h.revision))) throw new Error('Invalid workspace history.');
+            }
+            for (const m of data.mutations) {
+                if (!m || [typeof m.code === 'string', !!m.layout, !!m.data].filter(Boolean).length !== 1
+                    || (m.task !== undefined && !Number.isFinite(m.task))) throw new Error('Invalid workspace record.');
+                if (typeof m.code === 'string') new AsyncFunction(m.code);
+                if (m.layout) {
+                    const r = m.layout;
+                    if (typeof r.id !== 'string' || !r.id || !['x', 'y', 'w', 'h'].every(key => Number.isFinite(r[key])) || r.w <= 0 || r.h <= 0
+                        || (r.tone !== undefined && (!Number.isInteger(r.tone) || !TILE_COLORS[r.tone]))
+                        || ['minimized', 'maximized'].some(key => r[key] !== undefined && typeof r[key] !== 'boolean')) throw new Error('Invalid window layout.');
+                }
+                if (m.data && (typeof m.data.id !== 'string' || !m.data.id.trim() || !Object.hasOwn(m.data, 'value'))) throw new Error('Invalid tile data.');
+            }
+            return { history: data.history, mutations: data.mutations };
+        }
+
+        function replaceWorkspace(next) {
+            // One write keeps the current canvas intact if the import exceeds local storage capacity.
+            localStorage.setItem(CONTENT_KEY, JSON.stringify({ ...next, importBackup: state }));
+            busy = true;
             location.reload();
+        }
+
+        async function importHtml(file) {
+            if (!file || busy || controller || importing) return;
+            importing = true; setRunning(false); els.status.textContent = 'Reading import…';
+            try {
+                const next = readImport(await file.text());
+                if (!confirm(`Import ${file.name}? This replaces the canvas and saves a backup. Imported tiles run JavaScript; only import files you trust. API settings and usage stay on this device.`)) return;
+                replaceWorkspace(next);
+            } catch (e) { log('error', `Could not import workspace: ${e.message}`); }
+            finally { importing = false; $('import-file').value = ''; if (!busy) setRunning(!!controller); }
+        }
+
+        function restoreImportBackup() {
+            if (!importBackup || busy || controller || importing) return;
+            if (!confirm('Restore the backup? The current canvas will become the new backup. API settings and usage are kept.')) return;
+            try { replaceWorkspace(importBackup); }
+            catch (e) { log('error', `Could not restore backup: ${e.message}`); }
+        }
+
+        function restoreVersion(revision, historyLength) {
+            if (!Number.isInteger(revision) || busy || controller || importing) return;
+            if (!confirm('Restore this version? Later tasks and window changes will be removed. Settings and token usage are kept.')) return;
+            const next = { history: state.history.slice(0, historyLength), mutations: state.mutations.slice(0, revision) };
+            try {
+                localStorage.setItem(CONTENT_KEY, JSON.stringify({ ...next, importBackup }));
+                Object.assign(state, next);
+                busy = true; location.reload();
+            } catch (e) { log('error', `Could not restore version: ${e.message}`); }
         }
 
         function undo() {
@@ -444,8 +531,9 @@ The page is rebuilt on every load by replaying all recorded run_js scripts, in o
             const message = embedded.savedAt
                 ? 'Reset to the exported snapshot? Everything done since the export is discarded; settings are kept.'
                 : 'Reset the page to its pristine state? Mutations and history are cleared; settings are kept.';
-            if (!confirm(message)) return;
+            if (!confirm(message + (importBackup ? ' The import backup will also be cleared.' : ''))) return;
             localStorage.removeItem(CONTENT_KEY);
+            busy = true;
             location.reload();
         }
 
@@ -583,18 +671,18 @@ The page is rebuilt on every load by replaying all recorded run_js scripts, in o
             renderTiles();
         }
 
-        function rememberWindows() {
+        function rememberWindows(persist = true) {
             for (const [id, win] of windows) {
                 const layout = { id, ...win.rect, tone: win.tone, minimized: win.minimized, maximized: win.maximized };
                 const previous = state.mutations.findLast(m => m.layout?.id === id)?.layout;
                 if (JSON.stringify(previous) === JSON.stringify(layout)) continue;
                 state.mutations.push({ layout });
             }
-            saveContent();
+            if (persist) saveContent();
         }
 
         function arrangeWindows(record = true) {
-            if (record && (busy || controller)) return;
+            if (record && (busy || controller || importing)) return;
             const mobile = isMobile();
             const tiles = [...windows.values()].filter(win => mobile || !win.minimized)
                 .sort((a, b) => mobile ? a.rect.y - b.rect.y || a.rect.x - b.rect.x : a.rect.x - b.rect.x || a.rect.y - b.rect.y);
@@ -641,7 +729,7 @@ The page is rebuilt on every load by replaying all recorded run_js scripts, in o
 
         function uninstallWindow(id) {
             const win = windows.get(id);
-            if (!win || win.el.matches(HARNESS) || busy || controller) return;
+            if (!win || win.el.matches(HARNESS) || busy || controller || importing) return;
             if (!confirm(`Uninstall ${win.button.title}? You can undo this change from history.`)) return;
             const task = Date.now(), before = state.mutations.length;
             const prompt = `Uninstall ${win.button.title}`, summary = 'Tile uninstalled.';
@@ -687,7 +775,7 @@ The page is rebuilt on every load by replaying all recorded run_js scripts, in o
             syncWindows();
             focusWindow(windows.get('ouroboros-core'));
             const finish = event => {
-                if (busy || isMobile()) return;
+                if (busy || importing || isMobile()) return;
                 const win = windows.get(event.target.id);
                 if (!win || win.maximized) return;
                 win.rect = fitWindow(win.rect);
@@ -698,7 +786,7 @@ The page is rebuilt on every load by replaying all recorded run_js scripts, in o
                     enabled: !isMobile(),
                     allowFrom: '.window-header', ignoreFrom: 'button, input, textarea, select, summary, a',
                     listeners: { move: e => {
-                        const win = windows.get(e.target.id); if (busy || isMobile() || !win || win.maximized) return;
+                        const win = windows.get(e.target.id); if (busy || importing || isMobile() || !win || win.maximized) return;
                         win.rect.x += e.dx; win.rect.y += e.dy;
                         drawWindow(win); updateDesktopBounds();
                     }, end: finish },
@@ -707,14 +795,14 @@ The page is rebuilt on every load by replaying all recorded run_js scripts, in o
                     enabled: !isMobile(),
                     edges: { right: true, bottom: true },
                     listeners: { move: e => {
-                        const win = windows.get(e.target.id); if (busy || isMobile() || !win || win.maximized) return;
+                        const win = windows.get(e.target.id); if (busy || importing || isMobile() || !win || win.maximized) return;
                         Object.assign(win.rect, { w: Math.max(240, e.rect.width), h: Math.max(192, e.rect.height) });
                         drawWindow(win); updateDesktopBounds();
                     }, end: finish },
                 });
             layer.addEventListener('pointerdown', e => { const win = windows.get(e.target.closest('.desktop-window')?.id); if (win) focusWindow(win); });
             layer.addEventListener('click', e => {
-                if (busy) return;
+                if (busy || importing) return;
                 const button = e.target.closest('[data-window-action]');
                 if (button) windowAction(button.closest('.desktop-window').id, button.dataset.windowAction);
                 else if (isMobile() && e.target.closest('.window-header') && !e.target.closest('button, input, textarea, select, summary, a')) {
@@ -722,8 +810,8 @@ The page is rebuilt on every load by replaying all recorded run_js scripts, in o
                     windowAction(win.el.id, win.minimized ? 'show' : 'minimize');
                 }
             });
-            layer.addEventListener('dblclick', e => { if (!busy && !isMobile() && e.target.closest('.window-header') && !e.target.closest('button, summary, input')) windowAction(e.target.closest('.desktop-window').id, 'maximize'); });
-            dock.addEventListener('click', e => { const button = e.target.closest('[data-window]'); if (button && !busy) windowAction(button.dataset.window, 'show'); });
+            layer.addEventListener('dblclick', e => { if (!busy && !importing && !isMobile() && e.target.closest('.window-header') && !e.target.closest('button, summary, input')) windowAction(e.target.closest('.desktop-window').id, 'maximize'); });
+            dock.addEventListener('click', e => { const button = e.target.closest('[data-window]'); if (button && !busy && !importing) windowAction(button.dataset.window, 'show'); });
             $('arrange-btn').onclick = $('arrange-settings-btn').onclick = () => arrangeWindows();
             let wasMobile = isMobile();
             addEventListener('resize', () => {
@@ -800,23 +888,23 @@ The page is rebuilt on every load by replaying all recorded run_js scripts, in o
                 return new Option(`${h.role === 'user' ? 'Before ' : ''}${new Date(h.task).toLocaleString()} · ${clip(prompt.replace(/\s+/g, ' '), 60)}`, String(h.index));
             }));
             if (!versions.length) $('history-version').add(new Option('No saved versions yet', ''));
-            for (const id of ['history-version', 'rollback-btn']) $(id).disabled = busy || !!controller || !versions.length;
+            for (const id of ['history-version', 'rollback-btn']) $(id).disabled = busy || !!controller || importing || !versions.length;
         }
 
         function renderTiles() {
             const tiles = [...windows.values()].filter(win => !win.el.matches(HARNESS));
-            $('installed-tiles').innerHTML = tiles.map(win => `<li><span>${esc(win.button.title)}</span><button type="button" class="ui-button is-secondary is-danger shrink-0" data-uninstall="${esc(win.el.id)}" ${busy || controller ? 'disabled' : ''}>Uninstall</button></li>`).join('')
+            $('installed-tiles').innerHTML = tiles.map(win => `<li><span>${esc(win.button.title)}</span><button type="button" class="ui-button is-secondary is-danger shrink-0" data-uninstall="${esc(win.el.id)}" ${busy || controller || importing ? 'disabled' : ''}>Uninstall</button></li>`).join('')
                 || '<li class="text-xs text-[var(--muted)]">No generated tiles yet.</li>';
         }
 
         function setRunning(on) {
             els.btn.textContent = on ? 'Stop' : 'Send ↑';
             els.btn.classList.toggle('is-running', on);
-            els.btn.disabled = busy;
-            for (const id of ['export-btn', 'reset-btn', 'save-btn', 'arrange-btn', 'arrange-settings-btn']) $(id).disabled = busy || on;
-            for (const button of document.querySelectorAll('.window-controls button, #desktop-dock [data-window]')) button.disabled = busy;
+            els.btn.disabled = busy || importing;
+            for (const id of ['export-btn', 'import-btn', 'import-backup-btn', 'reset-btn', 'save-btn', 'arrange-btn', 'arrange-settings-btn']) $(id).disabled = busy || on || importing;
+            for (const button of document.querySelectorAll('.window-controls button, #desktop-dock [data-window]')) button.disabled = busy || importing;
             const last = $(`task-${state.history.at(-1)?.task}`);
-            els.undo.hidden = on || busy || !last || !Number.isInteger(state.history.findLast(h => h.role === 'user')?.before);
+            els.undo.hidden = on || busy || importing || !last || !Number.isInteger(state.history.findLast(h => h.role === 'user')?.before);
             if (last) last.append(els.undo);
             els.status.textContent = on ? 'Thinking…' : busy ? 'Restoring…' : 'Ready';
             renderHistory();
@@ -829,7 +917,7 @@ The page is rebuilt on every load by replaying all recorded run_js scripts, in o
         }
 
         function submit() {
-            if (busy || controller) return;
+            if (busy || controller || importing) return;
             if (!settings.apiKey || !settings.model) {
                 windowAction('ouroboros-settings', 'show');
                 $('api-key').focus();
@@ -861,6 +949,10 @@ The page is rebuilt on every load by replaying all recorded run_js scripts, in o
                 } catch (e) { log('error', `Could not save settings: ${e.message}`); }
             };
             $('export-btn').onclick = exportHtml;
+            $('import-btn').onclick = () => $('import-file').click();
+            $('import-file').onchange = e => importHtml(e.target.files[0]);
+            $('import-backup-btn').hidden = !importBackup;
+            $('import-backup-btn').onclick = restoreImportBackup;
             $('reset-btn').onclick = reset;
             $('rollback-btn').onclick = () => {
                 const index = Number($('history-version').value), entry = state.history[index];
