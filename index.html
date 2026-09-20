@@ -15,7 +15,7 @@
         #window-layer > .desktop-window { --tile: #375d58; --tint: #e5eeeb; --line: #dce2dc; --muted: #68766f; --accent: var(--tile); position: absolute; left: 0; top: 0; display: flex; flex-direction: column; box-sizing: border-box; overflow: hidden; transform-origin: 0 0; color: #293b34; background: #fffefb; font-size: 14px; line-height: 1.5; border: 1px solid var(--line); border-radius: var(--radius, 50%) !important; box-shadow: 0 8px 28px #293b3408; }
         #window-layer > .desktop-window > :not(.tile-face) { opacity: var(--detail, 0); }
         #window-layer > .desktop-window.is-focused { box-shadow: 0 12px 48px #293b3412; }
-        #window-layer > .desktop-window > .window-header { display: flex; align-items: center; gap: 8px; min-height: 52px; padding: 8px 12px 8px 20px; flex-shrink: 0; color: var(--tile); background: var(--tint); border-bottom: 1px solid var(--line); user-select: none; }
+        #window-layer > .desktop-window > .window-header { display: flex; align-items: center; gap: 8px; min-height: 52px; padding: 8px 12px 8px 20px; flex-shrink: 0; color: var(--tile); background: var(--tint); border-bottom: 1px solid var(--line); cursor: inherit; user-select: none; }
         #window-layer .window-header > :is(h1,h2,h3) { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 18px; font-weight: 500; letter-spacing: -.02em; }
         #window-layer .window-controls { display: flex; flex: none; margin-left: auto; }
         #window-layer .window-controls button { width: 36px; height: 36px; border-radius: 50%; color: var(--tile); font: 22px/1 system-ui; }
@@ -26,11 +26,11 @@
         #window-layer .tile-icon { font-size: var(--icon-size, 68px); font-weight: 300; line-height: 1.15; }
         #window-layer .tile-title { max-width: 78%; font-size: var(--label-size, 18px); font-weight: 500; line-height: 1.3; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
         #map-toolbar { position: fixed; inset: 0 0 auto; z-index: 10; display: flex; align-items: center; justify-content: space-between; height: 64px; padding: 0 24px; gap: 12px; }
-        #map-toolbar button, #map-zoom button { min-width: 40px; min-height: 40px; border: 0; border-radius: 22px; color: #375d58; background: transparent; }
+        #map-toolbar button, #map-zoom button { min-width: 44px; min-height: 44px; border: 0; border-radius: 22px; color: #375d58; background: transparent; }
         #map-toolbar button:hover, #map-zoom button:hover { background: #375d5810; }
         #map-toolbar button:focus-visible, #map-zoom button:focus-visible { outline: 2px solid #375d58; outline-offset: 2px; }
         #map-home { display: flex; align-items: center; gap: 10px; padding: 0 12px; font-size: 16px; font-weight: 500; letter-spacing: -.03em; }
-        #map-home span { font-size: 28px; font-weight: 300; }
+        #map-home > :first-child { font-size: 28px; font-weight: 300; }
         #map-toolbar .map-actions { display: flex; align-items: center; gap: 8px; }
         #map-new { padding: 0 14px; font-size: 13px; }
         #map-settings { font-size: 21px; }
@@ -171,7 +171,7 @@
     </section>
     </div></main>
     <header id="map-toolbar">
-        <button id="map-home" type="button" aria-label="All apps" title="All apps · Esc"><span aria-hidden="true">∞</span> Ouroboros</button>
+        <button id="map-home" type="button" aria-label="All apps" title="All apps · Esc"><span aria-hidden="true">∞</span><span id="map-home-title">Ouroboros</span></button>
         <div class="map-actions"><button id="map-new" type="button">+ New app</button><button id="map-settings" type="button" aria-label="Open Settings" title="Settings">⚙</button></div>
     </header>
     <p id="map-hint">Drag to explore · Scroll to zoom</p>
@@ -597,6 +597,7 @@ The page is rebuilt on every load by replaying all recorded run_js scripts, in o
                 if (entering) win.el.focus({ preventScroll: true });
             }
             $('map-scale').textContent = `${Math.round(camera.zoom * 100)}%`;
+            $('map-home-title').textContent = focus > .95 ? 'All apps' : 'Ouroboros';
             $('map-hint').textContent = focus > .95 ? 'All apps or Esc to return' : matchMedia('(pointer: coarse)').matches ? 'Drag to explore · Pinch to zoom' : 'Drag to explore · Scroll to zoom';
         }
 
