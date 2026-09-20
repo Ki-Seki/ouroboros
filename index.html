@@ -31,9 +31,6 @@
         #map-toolbar button:focus-visible, #map-zoom button:focus-visible { outline: 2px solid #375d58; outline-offset: 2px; }
         #map-home { display: flex; align-items: center; gap: 10px; padding: 0 12px; font-size: 16px; font-weight: 500; letter-spacing: -.03em; }
         #map-home > :first-child { font-size: 28px; font-weight: 300; }
-        #map-toolbar .map-actions { display: flex; align-items: center; gap: 8px; }
-        #map-new { padding: 0 14px; font-size: 13px; }
-        #map-settings { font-size: 21px; }
         #map-zoom { position: fixed; bottom: 14px; right: 20px; z-index: 10; display: flex; align-items: center; border: 1px solid #dce2dc; border-radius: 24px; background: #f8f9f5ee; }
         #map-zoom button { font-size: 22px; }
         #map-scale { min-width: 42px; text-align: center; font-size: 11px; font-variant-numeric: tabular-nums; color: #68766f; }
@@ -42,7 +39,6 @@
             #desktop { inset: 60px 0 54px; }
             #map-toolbar { height: 60px; padding: 0 8px; }
             #map-home { font-size: 14px; }
-            #map-new { font-size: 12px; padding: 0 8px; }
             #map-hint { left: 20px; bottom: 28px; max-width: calc(100% - 172px); font-size: 11px; }
             #map-zoom { right: 12px; bottom: 14px; }
         }
@@ -172,7 +168,6 @@
     </div></main>
     <header id="map-toolbar">
         <button id="map-home" type="button" aria-label="All apps" title="All apps · Esc"><span aria-hidden="true">∞</span><span id="map-home-title">Ouroboros</span></button>
-        <div class="map-actions"><button id="map-new" type="button">+ New app</button><button id="map-settings" type="button" aria-label="Open Settings" title="Settings">⚙</button></div>
     </header>
     <p id="map-hint">Drag to explore · Scroll to zoom</p>
     <div id="map-zoom" role="group" aria-label="Map zoom">
@@ -788,8 +783,6 @@ The page is rebuilt on every load by replaying all recorded run_js scripts, in o
             });
             desktop.addEventListener('touchcancel', () => { touch = null; });
             $('map-home').onclick = $('arrange-settings-btn').onclick = () => overview();
-            $('map-new').onclick = () => focusApp('ouroboros-core');
-            $('map-settings').onclick = () => focusApp('ouroboros-settings');
             $('map-zoom-in').onclick = () => zoomAt(camera.zoom * 1.25);
             $('map-zoom-out').onclick = () => zoomAt(camera.zoom / 1.25);
             addEventListener('keydown', e => {
@@ -881,7 +874,7 @@ The page is rebuilt on every load by replaying all recorded run_js scripts, in o
             els.btn.classList.toggle('is-running', on);
             els.btn.disabled = busy || importing;
             for (const id of ['export-btn', 'import-btn', 'import-backup-btn', 'reset-btn', 'save-btn', 'arrange-settings-btn']) $(id).disabled = busy || on || importing;
-            for (const button of document.querySelectorAll('.window-controls button, .tile-face, #map-new, #map-settings')) button.disabled = busy || importing;
+            for (const button of document.querySelectorAll('.window-controls button, .tile-face')) button.disabled = busy || importing;
             const last = $(`task-${state.history.at(-1)?.task}`);
             els.undo.hidden = on || busy || importing || !last || !Number.isInteger(state.history.findLast(h => h.role === 'user')?.before);
             if (last) last.append(els.undo);
