@@ -10,12 +10,15 @@
     <style>
         html, body { touch-action: pan-x pan-y; overscroll-behavior: none; }
         body { margin: 0; background: #eff1eb; color: #293b34; font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, sans-serif; }
-        #desktop { position: fixed; inset: 64px 0 36px; overflow: hidden; isolation: isolate; overscroll-behavior: contain; cursor: grab; }
+        #desktop { position: fixed; inset: 64px 0 36px; overflow: hidden; isolation: isolate; overscroll-behavior: contain; scrollbar-gutter: stable; cursor: grab; }
         #desktop, #desktop * { touch-action: none; }
-        #desktop.has-focus, #desktop.has-focus * { touch-action: pan-x pan-y; }
+        #desktop.has-focus, #desktop.has-focus *, #desktop.is-expanded, #desktop.is-expanded * { touch-action: pan-x pan-y; }
         #desktop.is-panning { cursor: grabbing; }
         #desktop.has-focus { cursor: default; }
         #window-layer { position: absolute; inset: 0; }
+        #desktop.is-expanded { overflow: auto; cursor: default; }
+        #desktop.is-switching { overflow: hidden; pointer-events: none; }
+        #desktop.is-expanded.has-overlay { overflow: hidden; }
         #window-layer > .desktop-window { --tile: #375d58; --tint: #e5eeeb; --line: #dce2dc; --muted: #68766f; --accent: var(--tile); position: absolute; left: 0; top: 0; display: flex; flex-direction: column; box-sizing: border-box; overflow: hidden; transform-origin: 0 0; color: #293b34; background: #fffefb; font-size: 14px; line-height: 1.5; border: 1px solid var(--line); border-radius: var(--radius, 50%) !important; box-shadow: 0 8px 28px #293b3408; }
         #window-layer > .desktop-window > :not(.tile-face) { opacity: var(--detail, 0); }
         #window-layer > .desktop-window.is-focused { box-shadow: 0 12px 48px #293b3412; }
@@ -39,14 +42,13 @@
         #map-home { display: flex; align-items: center; gap: 10px; padding: 0 12px; font-size: 16px; font-weight: 500; letter-spacing: -.03em; }
         #map-home .ui-icon { width: 28px; height: 28px; }
         #map-zoom { position: fixed; bottom: 14px; right: 20px; z-index: 10; display: flex; align-items: center; border: 1px solid #dce2dc; border-radius: 24px; background: #f8f9f5ee; }
+        #map-zoom[hidden] { display: none; }
         #map-zoom button { display: grid; place-items: center; }
         #map-scale { min-width: 42px; text-align: center; font-size: 11px; font-variant-numeric: tabular-nums; color: #68766f; }
-        #map-hint { position: fixed; bottom: 25px; left: 28px; color: #68766f; font-size: 12px; pointer-events: none; }
         @media (max-width: 599px) {
             #desktop { inset: 60px 0 54px; }
             #map-toolbar { height: 60px; padding: 0 8px; }
             #map-home { font-size: 14px; }
-            #map-hint { left: 20px; bottom: 28px; max-width: calc(100% - 172px); font-size: 11px; }
             #map-zoom { right: 12px; bottom: 14px; }
         }
         .desktop-window button, .desktop-window summary { touch-action: manipulation; }
@@ -111,7 +113,7 @@
 
         <!-- Activity Log -->
         <div id="activity-log" class="select-text" aria-label="Conversation">
-            <div id="empty-state" class="core-empty"><p class="text-3xl font-light text-[var(--tile)] mb-3">Make room<br>for an idea.</p><p class="text-sm">Describe a tool or a page.<br>It joins your app map.</p></div>
+            <div id="empty-state" class="core-empty"><p class="text-3xl font-light text-[var(--tile)] mb-3">Make room<br>for an idea.</p></div>
         </div>
         <button id="undo-btn" type="button" class="core-quiet" hidden>↶ Undo this change</button>
 
@@ -119,8 +121,7 @@
         <div class="core-composer shrink-0">
             <div class="core-input">
                 <textarea id="user-prompt" rows="2" aria-label="Your instruction" placeholder="What would you like to change?"></textarea>
-                <div class="flex justify-between items-center mt-2 gap-2">
-                    <span class="text-[11px] text-[var(--muted)]">Ctrl / ⌘ ↵</span>
+                <div class="flex justify-end items-center mt-2 gap-2">
                     <button id="execute-btn" type="button" class="ui-button" disabled>Send ↑</button>
                 </div>
             </div>
@@ -174,9 +175,8 @@
     </section>
     </div></main>
     <header id="map-toolbar">
-        <button id="map-home" type="button" aria-label="All apps" title="All apps · Esc"><span id="map-home-icon" aria-hidden="true"></span><span id="map-home-title">Ouroboros</span></button>
+        <button id="map-home" type="button" aria-label="All apps" title="All apps"><span id="map-home-icon" aria-hidden="true"></span><span id="map-home-title">Ouroboros</span></button>
     </header>
-    <p id="map-hint">Drag to explore · Scroll to zoom</p>
     <div id="map-zoom" role="group" aria-label="Map zoom">
         <button id="map-zoom-out" type="button" aria-label="Zoom out"></button><output id="map-scale" aria-label="Zoom level">70%</output><button id="map-zoom-in" type="button" aria-label="Zoom in"></button>
     </div>
@@ -204,11 +204,11 @@ The page is rebuilt on every load by replaying all recorded run_js scripts, in o
 - When updating an older tile, inspect its current content and existing storage first, then migrate that data with `setState` before replacing its UI. Always initialize the rebuilt view from `getState`.
 
 ## Rules
-- Never modify or remove #ouroboros-core, #ouroboros-settings, #map-toolbar, #map-zoom, #map-hint, the desktop containers, or the ouroboros-* script blocks. You may append windows to #window-layer.
+- Never modify or remove #ouroboros-core, #ouroboros-settings, #map-toolbar, #map-zoom, the desktop containers, or the ouroboros-* script blocks. You may append windows to #window-layer.
 - Build each feature as a window with a stable unique id and classes `draggable resizable`. Give it a direct `.window-header` child containing an h2 title, and a `.ui-body` content area. Append it to #window-layer. Set data-window-icon to a Lucide icon name in PascalCase, such as CalendarDays, StickyNote, Timer, Palette, Thermometer or Tally5. Choose from the full library; check `lucide.icons[name]` before using it. For icons inside the app, use `lucide.createElement(lucide.icons.IconName)`. Never use emoji, letters or pasted SVG paths as icons.
 - Previews are 320px square. Choose focused dimensions appropriate to the content with data-width and data-height in pixels (default 480 × 520). For example, a counter can be 360 × 320, notes 420 × 640, and a chart 900 × 560. Use "fill" for a dimension only when the app benefits from filling that axis. Optional data-aspect-ratio (e.g. "1" or "16/9") fits a fixed shape inside the preferred dimensions. The host centers the app and keeps it within the viewport; allow inner scrolling where needed.
-- Apps form a compact honeycomb map on both computers and phones. Zooming reveals their content and focuses one app; zooming out returns to tiles. The host handles all placement, sizing, zoom, focus and navigation; keep content responsive and do not build your own window controls.
-- Use the shared controls: `ui-label` for labels, `ui-field` for inputs/selects/textareas, `ui-button` for primary actions, `ui-button is-secondary` for secondary actions. The map uses circular colored tiles that open into softly rounded applications with warm-white content, dark text and clear typography. Each new window automatically receives a stable color from a coordinated muted palette of teal, blue, plum, clay, olive and rose; keep that color and use `var(--accent)` for emphasis, `var(--tint)` for subtle highlights and `var(--muted)` for secondary text. The desktop supplies 14px body text, 16px content padding, borders and focus styles. Use Tailwind for layout with 8px or 16px gaps. Keep content backgrounds transparent, without extra card shells, heavy shadows or unrelated color palettes. Larger light-weight numbers work well for key metrics; custom visuals should follow the user's request.
+- Apps form a compact honeycomb map on both computers and phones. Zooming reveals their content and focuses one app; zooming out returns to tiles. The home button switches between the app map and an expanded view where all apps are interactive. The host handles all placement, sizing, zoom, focus and navigation; keep content responsive and do not build your own window controls.
+- Use the shared controls: `ui-label` for labels, `ui-field` for inputs/selects/textareas, `ui-button` for primary actions, `ui-button is-secondary` for secondary actions. The map uses circular colored tiles that open into softly rounded applications with warm-white content, dark text and clear typography. Each new window automatically receives a stable color from a coordinated muted palette of teal, blue, plum, clay, olive and rose; keep that color and use `var(--accent)` for emphasis, `var(--tint)` for subtle highlights and `var(--muted)` for secondary text. The desktop supplies 14px body text, 16px content padding, borders and focus styles. Use Tailwind for layout with 8px or 16px gaps. Use concise labels and omit gesture tips or instructions that repeat obvious actions. Keep content backgrounds transparent, without extra card shells, heavy shadows or unrelated color palettes. Larger light-weight numbers work well for key metrics; custom visuals should follow the user's request.
 - Keep code compact. No large inline images or data URIs.
 - Verify your work with read_dom or eval_js before finishing. When done, reply with a one-line summary and no tool calls. Ask the user only when the request is truly ambiguous.
 - Web access: `fetch('https://r.jina.ai/' + url)` returns readable Markdown; `fetch('https://corsproxy.io/?url=' + encodeURIComponent(url))` returns raw HTML.
@@ -223,7 +223,7 @@ The page is rebuilt on every load by replaying all recorded run_js scripts, in o
         // --- CONSTANTS ---
         const MAX_STEPS = 40;
         const SETTINGS_KEY = 'ouroboros:settings';
-        const HARNESS = '#ouroboros-core, #ouroboros-settings, #map-toolbar, #map-zoom, #map-hint, #ouroboros-system_prompt, #ouroboros-state';
+        const HARNESS = '#ouroboros-core, #ouroboros-settings, #map-toolbar, #map-zoom, #ouroboros-system_prompt, #ouroboros-state';
         const AsyncFunction = Object.getPrototypeOf(async function () {}).constructor;
         const $ = id => document.getElementById(id);
 
@@ -558,18 +558,18 @@ The page is rebuilt on every load by replaying all recorded run_js scripts, in o
             ['#895f50', '#f3e9e3'], ['#66704e', '#edf0e3'], ['#825d6e', '#f3e8ee'],
         ];
         const desktop = $('desktop'), layer = $('window-layer'), windows = new Map();
-        const camera = { x: 0, y: 0, zoom: .7, focus: null };
+        const camera = { x: 0, y: 0, zoom: .7, expansion: 0, focus: null };
         const clamp = (n, min, max) => Math.min(max, Math.max(min, n));
-        const mix = (a, b, t) => a + (b - a) * t;
+        const mix = (a, b, t) => a * (1 - t) + b * t;
         const smooth = t => t * t * (3 - 2 * t);
-        let windowSerial = 0, nextTone = 0, animation = 0;
+        let windowSerial = 0, nextTone = 0, animation = 0, expanded = false, atHome = false;
 
         function drawIcon(target, name) {
             target.replaceChildren(lucide.createElement(lucide.icons[name], { class: 'ui-icon', 'stroke-width': 1.8, 'aria-hidden': 'true', focusable: 'false', preserveAspectRatio: 'xMidYMid meet' }));
         }
 
-        function appSize(el) {
-            const maxW = Math.max(1, desktop.clientWidth - 24), maxH = Math.max(1, desktop.clientHeight - 24);
+        function appSize(el, padding = 24) {
+            const maxW = Math.max(1, desktop.clientWidth - padding), maxH = Math.max(1, desktop.clientHeight - padding);
             const preferred = (value, max, fallback) => value === 'fill' ? max : Number.isFinite(+value) && +value > 0 ? +value : fallback;
             let w = preferred(el.dataset.width, maxW, 480), h = preferred(el.dataset.height, maxH, 520);
             const [a, b = 1] = (el.dataset.aspectRatio || '').split('/').map(Number), ratio = a / b;
@@ -590,38 +590,78 @@ The page is rebuilt on every load by replaying all recorded run_js scripts, in o
                     for (let step = 0; step < ring; step++, q += dq, r += dr) slots.push({ x: (q + r / 2) * SPACING, y: r * SPACING * Math.sqrt(3) / 2 });
                 }
             }
-            [...windows.values()].forEach((win, i) => Object.assign(win, slots[i]));
+            [...windows.values()].forEach((win, i) => { Object.assign(win, slots[i]); win.el.style.order = i; });
+        }
+
+        function expandedLayout() {
+            const rects = new Map(), width = desktop.clientWidth;
+            let row = [], rowWidth = 0, rowHeight = 0, y = 24;
+            const finishRow = () => {
+                let x = (width - rowWidth) / 2;
+                for (const [win, size] of row) { rects.set(win, { x, y, ...size }); x += size.w + 20; }
+                y += rowHeight + 20; row = []; rowWidth = 0; rowHeight = 0;
+            };
+            for (const win of windows.values()) {
+                const size = appSize(win.el, 48);
+                if (row.length && rowWidth + 20 + size.w > width - 48) finishRow();
+                rowWidth += (row.length ? 20 : 0) + size.w;
+                rowHeight = Math.max(rowHeight, size.h); row.push([win, size]);
+            }
+            if (row.length) finishRow();
+            return { rects, height: Math.max(desktop.clientHeight, y + 4) };
         }
 
         function renderMap() {
-            const detail = smooth(clamp((camera.zoom - .82) / .32, 0, 1));
-            const focus = smooth(clamp((camera.zoom - FOCUS_START) / (FOCUS_END - FOCUS_START), 0, 1));
+            const spread = camera.expansion, switching = spread !== Number(expanded);
+            const detail = mix(smooth(clamp((camera.zoom - .82) / .32, 0, 1)), 1, spread);
+            const focus = windows.has(camera.focus) ? smooth(clamp((camera.zoom - FOCUS_START) / (FOCUS_END - FOCUS_START), 0, 1)) : 0;
             const width = desktop.clientWidth, height = desktop.clientHeight;
             desktop.classList.toggle('has-focus', focus > .95);
+            desktop.classList.toggle('has-overlay', spread > 0 && focus > 0);
+            desktop.classList.toggle('is-expanded', spread > 0 || expanded);
+            desktop.classList.toggle('is-switching', switching);
+            if (!spread) { desktop.scrollTop = 0; desktop.scrollLeft = 0; }
+            const board = spread || expanded ? expandedLayout() : null;
+            layer.style.height = `${board?.height ?? height}px`;
+            const scrollX = desktop.scrollLeft, scrollY = desktop.scrollTop;
             for (const win of windows.values()) {
                 const selected = win.el.id === camera.focus, amount = selected ? focus : 0;
-                const scale = mix(camera.zoom, 1, amount);
+                const slot = board?.rects.get(win) ?? { x: 0, y: 0, w: TILE_SIZE, h: TILE_SIZE };
                 const size = appSize(win.el);
-                const w = mix(TILE_SIZE * camera.zoom, size.w, amount), h = mix(TILE_SIZE * camera.zoom, size.h, amount);
-                const x = mix(width / 2 + (win.x - camera.x - TILE_SIZE / 2) * camera.zoom, (width - size.w) / 2, amount);
-                const y = mix(height / 2 + (win.y - camera.y - TILE_SIZE / 2) * camera.zoom, (height - size.h) / 2, amount);
-                const interactive = selected && focus > .95;
+                const scale = mix(mix(camera.zoom, 1, spread), 1, amount);
+                const w = mix(mix(TILE_SIZE * camera.zoom, slot.w, spread), size.w, amount);
+                const h = mix(mix(TILE_SIZE * camera.zoom, slot.h, spread), size.h, amount);
+                const mapX = width / 2 + (win.x - camera.x - TILE_SIZE / 2) * camera.zoom + scrollX;
+                const mapY = height / 2 + (win.y - camera.y - TILE_SIZE / 2) * camera.zoom + scrollY;
+                const x = mix(mix(mapX, slot.x, spread), (width - size.w) / 2 + scrollX, amount);
+                const y = mix(mix(mapY, slot.y, spread), (height - size.h) / 2 + scrollY, amount);
+                const focused = selected && focus > .95 && !switching;
+                const interactive = !switching && (focused || (expanded && focus === 0));
                 Object.assign(win.el.style, { width: `${w / scale}px`, height: `${h / scale}px`, transform: `translate(${x}px, ${y}px) scale(${scale})`, zIndex: selected ? '3' : '1', filter: selected ? 'none' : `blur(${focus * 7 / scale}px)`, opacity: selected ? '1' : String(1 - focus * .75) });
                 win.el.style.setProperty('--detail', detail);
                 win.el.style.setProperty('--radius', `${mix(TILE_SIZE / 2, 22, detail)}px`);
                 win.el.style.setProperty('--label-size', `${Math.max(18, 12 / camera.zoom)}px`);
                 win.el.style.setProperty('--icon-size', `${Math.max(68, 28 / camera.zoom)}px`);
-                const entering = interactive && !win.el.classList.contains('is-focused');
-                win.el.classList.toggle('is-focused', interactive);
+                const entering = focused && !win.el.classList.contains('is-focused');
+                win.el.classList.toggle('is-focused', focused);
                 win.el.inert = focus > .15 && !selected;
-                win.face.hidden = interactive;
+                win.face.hidden = spread === 1 || focused;
                 win.face.querySelector('.tile-title').hidden = camera.zoom < .38;
                 for (const child of win.el.children) if (child !== win.face) child.inert = !interactive;
+                const control = win.el.querySelector('.window-controls button'), action = expanded && focus === 0 ? 'focus' : 'minimize';
+                if (control.dataset.windowAction !== action) {
+                    control.dataset.windowAction = action;
+                    control.title = action === 'focus' ? 'Focus app' : 'All apps'; control.setAttribute('aria-label', control.title);
+                    drawIcon(control, action === 'focus' ? 'Maximize2' : 'Minimize2');
+                }
                 if (entering) win.el.focus({ preventScroll: true });
             }
             $('map-scale').textContent = `${Math.round(camera.zoom * 100)}%`;
+            $('map-zoom').hidden = expanded && atHome;
             $('map-home-title').textContent = focus > .95 ? 'All apps' : 'Ouroboros';
-            $('map-hint').textContent = focus > .95 ? 'All apps or Esc to return' : matchMedia('(pointer: coarse)').matches ? 'Drag to explore · Pinch to zoom' : 'Drag to explore · Scroll to zoom';
+            $('map-home').title = !atHome ? 'All apps' : expanded ? 'Show app map' : 'Expand apps';
+            $('map-home').setAttribute('aria-label', $('map-home').title);
+            $('map-home').setAttribute('aria-pressed', String(expanded));
         }
 
         function moveCamera(next, animate = true, done = () => {}) {
@@ -629,8 +669,8 @@ The page is rebuilt on every load by replaying all recorded run_js scripts, in o
             if (!animate || matchMedia('(prefers-reduced-motion: reduce)').matches) { Object.assign(camera, next); renderMap(); done(); return; }
             const from = { ...camera }, start = performance.now();
             const frame = now => {
-                const t = clamp((now - start) / 360, 0, 1), ease = 1 - (1 - t) ** 3;
-                for (const key of ['x', 'y', 'zoom']) camera[key] = mix(from[key], next[key] ?? from[key], ease);
+                const t = clamp((now - start) / 480, 0, 1), ease = smooth(t);
+                for (const key of ['x', 'y', 'zoom', 'expansion']) camera[key] = mix(from[key], next[key] ?? from[key], ease);
                 renderMap();
                 if (t < 1) animation = requestAnimationFrame(frame);
                 else done();
@@ -640,24 +680,28 @@ The page is rebuilt on every load by replaying all recorded run_js scripts, in o
 
         function overview(animate = true) {
             if (!windows.size) return;
+            expanded = false; atHome = true;
             const tiles = [...windows.values()];
             const left = Math.min(...tiles.map(w => w.x)) - TILE_SIZE / 2, right = Math.max(...tiles.map(w => w.x)) + TILE_SIZE / 2;
             const top = Math.min(...tiles.map(w => w.y)) - TILE_SIZE / 2, bottom = Math.max(...tiles.map(w => w.y)) + TILE_SIZE / 2;
-            moveCamera({ x: (left + right) / 2, y: (top + bottom) / 2, zoom: clamp(Math.min((desktop.clientWidth - 56) / (right - left), (desktop.clientHeight - 56) / (bottom - top)), .12, .78) }, animate);
+            moveCamera({ x: (left + right) / 2, y: (top + bottom) / 2, expansion: 0, zoom: clamp(Math.min((desktop.clientWidth - 56) / (right - left), (desktop.clientHeight - 56) / (bottom - top)), .12, .78) }, animate);
         }
 
         function focusApp(id, animate = true) {
             const win = windows.get(id);
             if (!win) return;
+            atHome = false;
             if (camera.zoom > FOCUS_START && camera.focus !== id) {
                 moveCamera({ zoom: FOCUS_START }, animate, () => focusApp(id, animate));
                 return;
             }
             camera.focus = id;
-            moveCamera({ x: win.x, y: win.y, zoom: FOCUS_END }, animate);
+            moveCamera({ x: win.x, y: win.y, zoom: FOCUS_END, expansion: Number(expanded) }, animate);
         }
 
         function zoomAt(zoom, x = desktop.clientWidth / 2, y = desktop.clientHeight / 2) {
+            if ((expanded && atHome) || camera.expansion !== Number(expanded)) return;
+            atHome = false;
             cancelAnimationFrame(animation);
             const next = clamp(zoom, .12, FOCUS_END), dx = x - desktop.clientWidth / 2, dy = y - desktop.clientHeight / 2;
             const world = { x: camera.x + dx / camera.zoom, y: camera.y + dy / camera.zoom };
@@ -665,7 +709,20 @@ The page is rebuilt on every load by replaying all recorded run_js scripts, in o
                 camera.focus = [...windows.values()].sort((a, b) => Math.hypot(a.x - world.x, a.y - world.y) - Math.hypot(b.x - world.x, b.y - world.y))[0]?.el.id;
             }
             camera.x = world.x - dx / next; camera.y = world.y - dy / next; camera.zoom = next;
+            if (expanded && next <= FOCUS_START) atHome = true;
             renderMap();
+        }
+
+        function returnHome(animate = true) {
+            if (!expanded) return overview(animate);
+            atHome = true;
+            moveCamera({ zoom: .78 }, animate);
+        }
+
+        function switchView() {
+            if (expanded) return overview();
+            expanded = true;
+            moveCamera({ expansion: 1, zoom: .78 });
         }
 
         function syncWindows() {
@@ -703,8 +760,8 @@ The page is rebuilt on every load by replaying all recorded run_js scripts, in o
                 win.face.disabled = busy || importing;
             }
             if (changed) layoutApps();
-            if (camera.focus && !windows.has(camera.focus)) { camera.focus = null; overview(false); }
-            else if (added && !busy) focusApp(added);
+            if (camera.focus && !windows.has(camera.focus)) { camera.focus = null; returnHome(false); }
+            else if (added && !busy && !expanded) focusApp(added);
             else renderMap();
             renderTiles();
         }
@@ -727,7 +784,7 @@ The page is rebuilt on every load by replaying all recorded run_js scripts, in o
         }
 
         function windowAction(id, action) {
-            if (action === 'minimize') overview();
+            if (action === 'minimize') returnHome();
             else focusApp(id);
         }
 
@@ -754,8 +811,8 @@ The page is rebuilt on every load by replaying all recorded run_js scripts, in o
             syncWindows();
             let drag = null, touch = null, suppressClick = false;
             const point = e => { const box = desktop.getBoundingClientRect(); return { x: e.clientX - box.left, y: e.clientY - box.top }; };
-            const pan = (dx, dy) => { cancelAnimationFrame(animation); camera.x -= dx / camera.zoom; camera.y -= dy / camera.zoom; renderMap(); };
-            const canExplore = () => !desktop.classList.contains('has-focus');
+            const pan = (dx, dy) => { cancelAnimationFrame(animation); atHome = false; camera.x -= dx / camera.zoom; camera.y -= dy / camera.zoom; renderMap(); };
+            const canExplore = () => !expanded && camera.expansion === 0 && !desktop.classList.contains('has-focus');
             desktop.addEventListener('pointerdown', e => {
                 if (e.pointerType === 'touch' || e.button !== 0 || !canExplore()) return;
                 drag = { x: e.clientX, y: e.clientY, distance: 0, face: e.target.closest('.tile-face') };
@@ -780,9 +837,11 @@ The page is rebuilt on every load by replaying all recorded run_js scripts, in o
                 if (busy || importing) return;
                 const face = e.target.closest('.tile-face'), back = e.target.closest('[data-window-action]');
                 if (face) focusApp(face.closest('.desktop-window').id);
-                if (back || (desktop.classList.contains('has-focus') && !e.target.closest('.is-focused'))) overview();
+                if (back?.dataset.windowAction === 'focus') { focusApp(back.closest('.desktop-window').id); return; }
+                if (back || (desktop.classList.contains('has-focus') && !e.target.closest('.is-focused'))) returnHome();
             });
             desktop.addEventListener('wheel', e => {
+                if (expanded && atHome) return;
                 if (!e.ctrlKey && desktop.classList.contains('has-focus') && e.target.closest('.is-focused')) return;
                 e.preventDefault();
                 const p = point(e), delta = e.deltaY * (e.deltaMode === 1 ? 16 : e.deltaMode === 2 ? desktop.clientHeight : 1);
@@ -793,6 +852,8 @@ The page is rebuilt on every load by replaying all recorded run_js scripts, in o
             const distance = points => points.length > 1 ? Math.hypot(points[0].x - points[1].x, points[0].y - points[1].y) : 0;
             // A pinch can straddle the canvas and toolbar; own it for the whole page.
             document.addEventListener('touchstart', e => {
+                if (camera.expansion !== Number(expanded)) { if (e.touches.length > 1 && e.cancelable) e.preventDefault(); return; }
+                if (expanded && atHome) { if (e.touches.length > 1 && e.cancelable) e.preventDefault(); return; }
                 if (e.touches.length < 2 && (!canExplore() || !desktop.contains(e.target))) return;
                 if (e.cancelable) e.preventDefault();
                 cancelAnimationFrame(animation);
@@ -817,19 +878,23 @@ The page is rebuilt on every load by replaying all recorded run_js scripts, in o
                 touch = null;
             }, { capture: true });
             document.addEventListener('touchcancel', () => { touch = null; }, { capture: true });
-            $('map-home').onclick = $('arrange-settings-btn').onclick = () => overview();
+            $('map-home').onclick = () => {
+                if (!atHome) returnHome();
+                else switchView();
+            };
+            $('arrange-settings-btn').onclick = () => returnHome();
             $('map-zoom-in').onclick = () => zoomAt(camera.zoom * 1.25);
             $('map-zoom-out').onclick = () => zoomAt(camera.zoom / 1.25);
             addEventListener('keydown', e => {
                 if (e.defaultPrevented || e.isComposing || e.ctrlKey || e.metaKey || e.altKey) return;
-                if (e.key === 'Escape') { e.preventDefault(); overview(); }
+                if (e.key === 'Escape') { e.preventDefault(); returnHome(); }
                 else if (!e.target.closest('input, textarea, select, [contenteditable="true"]')) {
                     if (e.key === '+' || e.key === '=') zoomAt(camera.zoom * 1.25);
                     if (e.key === '-') zoomAt(camera.zoom / 1.25);
-                    if (e.key === '0') overview();
+                    if (e.key === '0') returnHome();
                 }
             });
-            addEventListener('resize', () => camera.zoom >= FOCUS_END ? renderMap() : overview(false));
+            addEventListener('resize', () => expanded || camera.zoom >= FOCUS_END ? renderMap() : overview(false));
         }
 
         // --- UI ---
