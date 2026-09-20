@@ -8,13 +8,17 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.jsdelivr.net/npm/interactjs/dist/interact.min.js"></script>
     <style>
-        #desktop { position: absolute; inset: 0 0 80px; overflow: auto; overscroll-behavior: contain; }
+        #desktop { position: absolute; inset: 0 0 80px; overflow: auto; overscroll-behavior: contain; isolation: isolate; }
+        #desktop:has(> .has-maximized) { overflow: hidden; }
         body { background: #eeeee8; font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, sans-serif; }
         #window-layer { position: relative; width: 100%; min-width: 100%; min-height: 100%; }
         #window-layer > .desktop-window, #desktop-dock button { --tile: #375d58; --tint: #e5eeeb; --line: #dce2dc; --muted: #68766f; --accent: var(--tile); }
         #window-layer > .desktop-window { position: absolute; display: flex; flex-direction: column; box-sizing: border-box; overflow: hidden; color: #293b34; background: #fffefb; font-size: 14px; line-height: 1.5; border: 1px solid var(--line); border-radius: 0; box-shadow: none; }
         #window-layer > .desktop-window[hidden] { display: none !important; }
         #window-layer > .desktop-window.is-active { border-color: var(--tile); }
+        #window-layer.has-maximized::after { content: ''; position: fixed; inset: 0 0 80px; z-index: 1; background: #293b3424; backdrop-filter: blur(5px); }
+        #window-layer.has-maximized > .desktop-window { z-index: 0 !important; }
+        #window-layer.has-maximized > .desktop-window[data-maximized="true"] { z-index: 2 !important; }
         #window-layer > .desktop-window > .window-header { display: flex; align-items: center; gap: 8px; min-height: 52px; padding: 8px 10px 8px 16px; flex-shrink: 0; color: var(--tile); background: var(--tint); border-bottom: 1px solid var(--line); cursor: grab; touch-action: none; user-select: none; }
         #window-layer .window-header > :is(h1,h2,h3) { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 20px; font-weight: 400; letter-spacing: -.02em; }
         #window-layer .window-controls { display: flex; flex: none; gap: 2px; margin-left: auto; }
@@ -81,6 +85,7 @@
             #desktop { inset: 0; }
             #desktop-dock { display: none; }
             #window-layer { display: flex; flex-direction: column; gap: 12px; padding: 12px; }
+            #window-layer.has-maximized::after { display: none; }
             #window-layer > .desktop-window { position: relative !important; left: auto !important; top: auto !important; width: 100% !important; height: auto !important; flex: none; }
             #window-layer > .desktop-window.is-collapsed > :not(.window-header) { display: none !important; }
             #window-layer > .desktop-window > .window-header { cursor: pointer; touch-action: pan-y; }
@@ -576,7 +581,7 @@ The page is rebuilt on every load by replaying all recorded run_js scripts, in o
             const [accent, tint] = TILE_COLORS[win.tone];
             for (const el of [win.el, win.button]) { el.style.setProperty('--tile', accent); el.style.setProperty('--tint', tint); }
             const rect = win.maximized
-                ? { x: EDGE, y: EDGE, w: desktop.clientWidth - EDGE * 2, h: desktop.clientHeight - EDGE * 2 }
+                ? { x: EDGE, y: EDGE, w: desktop.offsetWidth - EDGE * 2, h: desktop.offsetHeight - EDGE * 2 }
                 : win.rect;
             Object.assign(win.el.style, { position: win.maximized ? 'fixed' : 'absolute', left: `${rect.x}px`, top: `${rect.y}px`, width: `${rect.w}px`, height: `${rect.h}px`, transform: 'none' });
             win.el.hidden = win.minimized && !isMobile();
@@ -595,7 +600,7 @@ The page is rebuilt on every load by replaying all recorded run_js scripts, in o
 
         function focusWindow(win, reveal = false) {
             for (const other of windows.values()) {
-                if (isMobile() && other !== win && other.maximized && !other.minimized) { other.maximized = false; drawWindow(other); }
+                if (other !== win && other.maximized && !other.minimized) { other.maximized = false; drawWindow(other); }
             }
             activeWindow = win.el.id;
             win.el.style.zIndex = ++topZ;
@@ -610,7 +615,12 @@ The page is rebuilt on every load by replaying all recorded run_js scripts, in o
         }
 
         function updateDesktopBounds() {
-            layer.classList.toggle('has-maximized', isMobile() && [...windows.values()].some(w => !w.minimized && w.maximized));
+            const maximized = [...windows.values()].find(w => !w.minimized && w.maximized);
+            layer.classList.toggle('has-maximized', !!maximized);
+            for (const win of windows.values()) {
+                const inert = !!maximized && win !== maximized;
+                if (win.el.inert !== inert) win.el.inert = inert;
+            }
             if (isMobile()) {
                 [...windows.values()].sort((a, b) => a.rect.y - b.rect.y || a.rect.x - b.rect.x).forEach((win, index) => {
                     if (layer.children[index] !== win.el) layer.insertBefore(win.el, layer.children[index] || null);
@@ -768,7 +778,7 @@ The page is rebuilt on every load by replaying all recorded run_js scripts, in o
             if (TILE_COLORS[tone]) win.tone = tone;
             Object.assign(win, { minimized, maximized });
             drawWindow(win);
-            if (isMobile() && maximized && !minimized) focusWindow(win);
+            if (maximized && !minimized) focusWindow(win);
             updateDesktopBounds();
         }
 
