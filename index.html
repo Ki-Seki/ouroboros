@@ -11,6 +11,7 @@
         html, body { touch-action: pan-x pan-y; overscroll-behavior: none; }
         .no-animations *, .no-animations *::before, .no-animations *::after { animation: none !important; transition: none !important; scroll-behavior: auto !important; }
         body { margin: 0; background: #eff1eb; color: #293b34; font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, sans-serif; }
+        body.restoring > :not(#map-toolbar) { visibility: hidden !important; opacity: 0 !important; }
         #desktop { position: fixed; inset: 64px 0 36px; overflow: hidden; isolation: isolate; overscroll-behavior: contain; scrollbar-gutter: stable; cursor: grab; }
         #desktop, #desktop * { touch-action: none; }
         #desktop.has-focus, #desktop.has-focus *, #desktop.is-expanded, #desktop.is-expanded * { touch-action: pan-x pan-y; }
@@ -97,9 +98,9 @@
         @media (pointer: coarse) { .desktop-window button, .desktop-window summary { min-height: 44px; } #window-layer .window-controls button { width: 44px; height: 44px; } .desktop-window .ui-field, .core-panel #user-prompt { font-size: 16px; } }
     </style>
 </head>
-<body class="overflow-hidden relative w-screen h-screen">
+<body class="restoring overflow-hidden relative w-screen h-screen">
 
-    <main id="desktop" aria-label="Application map" tabindex="0"><div id="window-layer">
+    <main id="desktop" aria-label="Application map" tabindex="0" aria-busy="true" inert><div id="window-layer">
     <!-- GENESIS WINDOW: CORE -->
     <div id="ouroboros-core" class="draggable resizable core-panel select-none" data-window-title="Ouroboros" data-window-icon="Infinity" data-width="520" data-height="640">
         <!-- Header -->
@@ -177,7 +178,7 @@
     </section>
     </div></main>
     <header id="map-toolbar">
-        <button id="map-home" type="button" aria-label="All apps" title="All apps"><span id="map-home-icon" aria-hidden="true"></span><span id="map-home-title">Ouroboros</span></button>
+        <button id="map-home" type="button" aria-label="Restoring workspace" title="Restoring workspace" disabled><span id="map-home-icon" aria-hidden="true"></span><span id="map-home-title">Restoring…</span></button>
     </header>
 
     <!-- EMBEDDED SYSTEM PROMPT (editable by users) -->
@@ -675,8 +676,8 @@ The page is rebuilt on every load by replaying all recorded run_js scripts, in o
                 }
                 if (entering) win.el.focus({ preventScroll: true });
             }
-            $('map-home-title').textContent = focus > .95 ? 'All apps' : 'Ouroboros';
-            $('map-home').title = !atHome ? 'All apps' : expanded ? 'Show app map' : 'Expand apps';
+            $('map-home-title').textContent = busy ? 'Restoring…' : focus > .95 ? 'All apps' : 'Ouroboros';
+            $('map-home').title = busy ? 'Restoring workspace' : !atHome ? 'All apps' : expanded ? 'Show app map' : 'Expand apps';
             $('map-home').setAttribute('aria-label', $('map-home').title);
             $('map-home').setAttribute('aria-pressed', String(expanded));
         }
@@ -981,6 +982,7 @@ The page is rebuilt on every load by replaying all recorded run_js scripts, in o
         }
 
         function setRunning(on) {
+            $('map-home').disabled = busy;
             els.btn.textContent = on ? 'Stop' : 'Send ↑';
             els.btn.classList.toggle('is-running', on);
             els.btn.disabled = busy || importing;
@@ -1066,9 +1068,11 @@ The page is rebuilt on every load by replaying all recorded run_js scripts, in o
             setRunning(false);
             for (const h of state.history) log(h.role, h.content, h.task);
             await replay();
-            overview(false);
             busy = false;
+            overview(false);
             setRunning(false);
+            desktop.removeAttribute('inert'); desktop.removeAttribute('aria-busy');
+            document.body.classList.remove('restoring');
 
             let queued = false;
             new MutationObserver(mutations => {
