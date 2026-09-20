@@ -8,8 +8,11 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.jsdelivr.net/npm/lucide@1.47.0/dist/umd/lucide.min.js"></script>
     <style>
+        html, body { touch-action: pan-x pan-y; overscroll-behavior: none; }
         body { margin: 0; background: #eff1eb; color: #293b34; font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, sans-serif; }
         #desktop { position: fixed; inset: 64px 0 36px; overflow: hidden; isolation: isolate; overscroll-behavior: contain; cursor: grab; }
+        #desktop, #desktop * { touch-action: none; }
+        #desktop.has-focus, #desktop.has-focus * { touch-action: pan-x pan-y; }
         #desktop.is-panning { cursor: grabbing; }
         #desktop.has-focus { cursor: default; }
         #window-layer { position: absolute; inset: 0; }
@@ -19,14 +22,16 @@
         #window-layer > .desktop-window > .window-header { display: flex; align-items: center; gap: 8px; min-height: 52px; padding: 8px 12px 8px 20px; flex-shrink: 0; color: var(--tile); background: var(--tint); border-bottom: 1px solid var(--line); cursor: inherit; user-select: none; }
         #window-layer .window-header > :is(h1,h2,h3) { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 18px; font-weight: 500; letter-spacing: -.02em; }
         #window-layer .window-controls { display: flex; flex: none; margin-left: auto; }
-        #window-layer .window-controls button { display: grid; place-items: center; width: 36px; height: 36px; border-radius: 50%; color: var(--tile); }
+        #window-layer .window-controls button { display: grid; place-items: center; flex: none; width: 36px; height: 36px; padding: 0; aspect-ratio: 1; border-radius: 50%; color: var(--tile); }
         #window-layer .window-controls button:hover { background: #00000008; }
         #window-layer .tile-face { position: absolute; inset: 0; z-index: 2; display: grid; align-content: center; justify-items: center; gap: 12px; width: 100%; border: 0; border-radius: inherit; color: #fffefb; background: linear-gradient(145deg, color-mix(in srgb, var(--tile), white 14%), var(--tile)); opacity: calc(1 - var(--detail, 0)); cursor: pointer; }
         #window-layer .tile-face[hidden] { display: none; }
         #window-layer .tile-face:focus-visible { outline: 5px solid white; outline-offset: -10px; }
         .ui-icon { display: block; width: 20px; height: 20px; flex: none; }
+        #window-layer .window-controls .ui-icon { min-width: 20px; min-height: 20px; aspect-ratio: 1; }
         #window-layer .tile-icon .ui-icon { width: var(--icon-size, 68px); height: var(--icon-size, 68px); stroke-width: 1.6; }
         #window-layer .tile-title { max-width: 78%; font-size: var(--label-size, 18px); font-weight: 500; line-height: 1.3; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+        #window-layer .tile-title[hidden] { display: none !important; }
         #map-toolbar { position: fixed; inset: 0 0 auto; z-index: 10; display: flex; align-items: center; justify-content: space-between; height: 64px; padding: 0 24px; gap: 12px; }
         #map-toolbar button, #map-zoom button { min-width: 44px; min-height: 44px; border: 0; border-radius: 22px; color: #375d58; background: transparent; }
         #map-toolbar button:hover, #map-zoom button:hover { background: #375d5810; }
@@ -91,7 +96,7 @@
         .core-panel #user-prompt::placeholder { color: #78857c; }
         .core-panel .core-meta { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 4px 12px; margin-top: 9px; color: var(--muted); font-size: 11px; }
         .core-panel #model-btn { max-width: 190px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-        @media (pointer: coarse) { .desktop-window button, .desktop-window summary { min-height: 44px; } .desktop-window .ui-field, .core-panel #user-prompt { font-size: 16px; } }
+        @media (pointer: coarse) { .desktop-window button, .desktop-window summary { min-height: 44px; } #window-layer .window-controls button { width: 44px; height: 44px; } .desktop-window .ui-field, .core-panel #user-prompt { font-size: 16px; } }
     </style>
 </head>
 <body class="overflow-hidden relative w-screen h-screen">
@@ -560,7 +565,7 @@ The page is rebuilt on every load by replaying all recorded run_js scripts, in o
         let windowSerial = 0, nextTone = 0, animation = 0;
 
         function drawIcon(target, name) {
-            target.replaceChildren(lucide.createElement(lucide.icons[name], { class: 'ui-icon', 'stroke-width': 1.8, 'aria-hidden': 'true', focusable: 'false' }));
+            target.replaceChildren(lucide.createElement(lucide.icons[name], { class: 'ui-icon', 'stroke-width': 1.8, 'aria-hidden': 'true', focusable: 'false', preserveAspectRatio: 'xMidYMid meet' }));
         }
 
         function appSize(el) {
@@ -610,7 +615,7 @@ The page is rebuilt on every load by replaying all recorded run_js scripts, in o
                 win.el.classList.toggle('is-focused', interactive);
                 win.el.inert = focus > .15 && !selected;
                 win.face.hidden = interactive;
-                win.face.querySelector('.tile-title').hidden = camera.zoom < .23;
+                win.face.querySelector('.tile-title').hidden = camera.zoom < .38;
                 for (const child of win.el.children) if (child !== win.face) child.inert = !interactive;
                 if (entering) win.el.focus({ preventScroll: true });
             }
@@ -775,7 +780,7 @@ The page is rebuilt on every load by replaying all recorded run_js scripts, in o
                 if (busy || importing) return;
                 const face = e.target.closest('.tile-face'), back = e.target.closest('[data-window-action]');
                 if (face) focusApp(face.closest('.desktop-window').id);
-                if (back) overview();
+                if (back || (desktop.classList.contains('has-focus') && !e.target.closest('.is-focused'))) overview();
             });
             desktop.addEventListener('wheel', e => {
                 if (!e.ctrlKey && desktop.classList.contains('has-focus') && e.target.closest('.is-focused')) return;
@@ -786,15 +791,17 @@ The page is rebuilt on every load by replaying all recorded run_js scripts, in o
             const touchPoints = e => [...e.touches].map(point);
             const midpoint = points => points.length > 1 ? { x: (points[0].x + points[1].x) / 2, y: (points[0].y + points[1].y) / 2 } : points[0];
             const distance = points => points.length > 1 ? Math.hypot(points[0].x - points[1].x, points[0].y - points[1].y) : 0;
-            desktop.addEventListener('touchstart', e => {
-                if (e.touches.length < 2 && !canExplore()) return;
-                e.preventDefault();
+            // A pinch can straddle the canvas and toolbar; own it for the whole page.
+            document.addEventListener('touchstart', e => {
+                if (e.touches.length < 2 && (!canExplore() || !desktop.contains(e.target))) return;
+                if (e.cancelable) e.preventDefault();
+                cancelAnimationFrame(animation);
                 const points = touchPoints(e);
                 touch = { p: midpoint(points), distance: distance(points), traveled: 0, moved: e.touches.length > 1, target: e.target.closest('.tile-face') };
-            }, { passive: false });
-            desktop.addEventListener('touchmove', e => {
+            }, { passive: false, capture: true });
+            document.addEventListener('touchmove', e => {
                 if (!touch) return;
-                e.preventDefault();
+                if (e.cancelable) e.preventDefault();
                 const points = touchPoints(e), p = midpoint(points), d = distance(points);
                 const dx = p.x - touch.p.x, dy = p.y - touch.p.y;
                 if (d && touch.distance) zoomAt(camera.zoom * d / touch.distance, touch.p.x, touch.p.y);
@@ -802,14 +809,14 @@ The page is rebuilt on every load by replaying all recorded run_js scripts, in o
                 touch.traveled += Math.hypot(dx, dy);
                 touch.moved ||= touch.traveled > 4 || d > 0;
                 Object.assign(touch, { p, distance: d });
-            }, { passive: false });
-            desktop.addEventListener('touchend', e => {
+            }, { passive: false, capture: true });
+            document.addEventListener('touchend', e => {
                 if (!touch) return;
                 if (e.touches.length) { const points = touchPoints(e); Object.assign(touch, { p: midpoint(points), distance: distance(points), moved: true }); return; }
                 if (!touch.moved && touch.target && !busy && !importing) focusApp(touch.target.closest('.desktop-window').id);
                 touch = null;
-            });
-            desktop.addEventListener('touchcancel', () => { touch = null; });
+            }, { capture: true });
+            document.addEventListener('touchcancel', () => { touch = null; }, { capture: true });
             $('map-home').onclick = $('arrange-settings-btn').onclick = () => overview();
             $('map-zoom-in').onclick = () => zoomAt(camera.zoom * 1.25);
             $('map-zoom-out').onclick = () => zoomAt(camera.zoom / 1.25);
