@@ -6,36 +6,49 @@
     <title>Ouroboros</title>
     <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E🐍%3C/text%3E%3C/svg%3E">
     <script src="https://cdn.tailwindcss.com"></script>
-    <script src="https://cdn.jsdelivr.net/npm/interactjs/dist/interact.min.js"></script>
     <style>
-        #desktop { position: absolute; inset: 0 0 80px; overflow: auto; overscroll-behavior: contain; isolation: isolate; }
-        #desktop:has(> .has-maximized) { overflow: hidden; }
-        body { background: #eeeee8; font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, sans-serif; }
-        #window-layer { position: relative; width: 100%; min-width: 100%; min-height: 100%; }
-        #window-layer > .desktop-window, #desktop-dock button { --tile: #375d58; --tint: #e5eeeb; --line: #dce2dc; --muted: #68766f; --accent: var(--tile); }
-        #window-layer > .desktop-window { position: absolute; display: flex; flex-direction: column; box-sizing: border-box; overflow: hidden; color: #293b34; background: #fffefb; font-size: 14px; line-height: 1.5; border: 1px solid var(--line); border-radius: 0; box-shadow: none; }
-        #window-layer > .desktop-window[hidden] { display: none !important; }
-        #window-layer > .desktop-window.is-active { border-color: var(--tile); }
-        #window-layer.has-maximized::after { content: ''; position: fixed; inset: 0 0 80px; z-index: 1; background: #293b3424; backdrop-filter: blur(5px); }
-        #window-layer.has-maximized > .desktop-window { z-index: 0 !important; }
-        #window-layer.has-maximized > .desktop-window[data-maximized="true"] { z-index: 2 !important; }
-        #window-layer > .desktop-window > .window-header { display: flex; align-items: center; gap: 8px; min-height: 52px; padding: 8px 10px 8px 16px; flex-shrink: 0; color: var(--tile); background: var(--tint); border-bottom: 1px solid var(--line); cursor: grab; touch-action: none; user-select: none; }
-        #window-layer .window-header > :is(h1,h2,h3) { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 20px; font-weight: 400; letter-spacing: -.02em; }
-        #window-layer .window-controls { display: flex; flex: none; gap: 2px; margin-left: auto; }
-        #window-layer .window-controls button { width: 28px; height: 28px; color: var(--muted); font: 18px/1 system-ui; }
-        #window-layer .window-controls button:hover { color: var(--tile); background: #00000008; }
-        #desktop-dock { position: fixed; z-index: 100000; bottom: 0; left: 0; right: 0; display: flex; gap: 8px; overflow-x: auto; padding: 8px 16px; border-top: 1px solid #dce2dc; background: #f8f9f5; }
-        #desktop-dock button { display: grid; flex: none; justify-items: start; gap: 4px; min-width: 88px; max-width: 128px; padding: 5px 10px; border: 0; border-bottom: 2px solid transparent; border-radius: 0; color: var(--tile); background: transparent; font-size: 11px; text-align: left; }
-        #desktop-dock button:hover { background: var(--tint); }
-        #desktop-dock button.is-active { background: var(--tint); border-bottom-color: var(--tile); }
-        #desktop-dock button.is-minimized { color: var(--muted); }
-        #desktop-dock button:focus-visible { outline: 2px solid var(--tile); outline-offset: -3px; }
-        #desktop-dock .dock-icon { font-size: 21px; font-weight: 400; line-height: 22px; }
-        #desktop-dock .dock-title { max-width: 96px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-        #desktop-dock #arrange-btn { border-right: 1px solid var(--line); }
+        body { margin: 0; background: #eff1eb; color: #293b34; font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, sans-serif; }
+        #desktop { position: fixed; inset: 64px 0 36px; overflow: hidden; isolation: isolate; overscroll-behavior: contain; cursor: grab; }
+        #desktop.is-panning { cursor: grabbing; }
+        #desktop.has-focus { cursor: default; }
+        #window-layer { position: absolute; inset: 0; }
+        #window-layer > .desktop-window { --tile: #375d58; --tint: #e5eeeb; --line: #dce2dc; --muted: #68766f; --accent: var(--tile); position: absolute; left: 0; top: 0; display: flex; flex-direction: column; box-sizing: border-box; overflow: hidden; transform-origin: 0 0; color: #293b34; background: #fffefb; font-size: 14px; line-height: 1.5; border: 1px solid var(--line); border-radius: var(--radius, 50%) !important; box-shadow: 0 8px 28px #293b3408; }
+        #window-layer > .desktop-window > :not(.tile-face) { opacity: var(--detail, 0); }
+        #window-layer > .desktop-window.is-focused { box-shadow: 0 12px 48px #293b3412; }
+        #window-layer > .desktop-window > .window-header { display: flex; align-items: center; gap: 8px; min-height: 52px; padding: 8px 12px 8px 20px; flex-shrink: 0; color: var(--tile); background: var(--tint); border-bottom: 1px solid var(--line); user-select: none; }
+        #window-layer .window-header > :is(h1,h2,h3) { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 18px; font-weight: 500; letter-spacing: -.02em; }
+        #window-layer .window-controls { display: flex; flex: none; margin-left: auto; }
+        #window-layer .window-controls button { width: 36px; height: 36px; border-radius: 50%; color: var(--tile); font: 22px/1 system-ui; }
+        #window-layer .window-controls button:hover { background: #00000008; }
+        #window-layer .tile-face { position: absolute; inset: 0; z-index: 2; display: grid; align-content: center; justify-items: center; gap: 12px; width: 100%; border: 0; border-radius: inherit; color: #fffefb; background: linear-gradient(145deg, color-mix(in srgb, var(--tile), white 14%), var(--tile)); opacity: calc(1 - var(--detail, 0)); cursor: pointer; }
+        #window-layer .tile-face[hidden] { display: none; }
+        #window-layer .tile-face:focus-visible { outline: 5px solid white; outline-offset: -10px; }
+        #window-layer .tile-icon { font-size: var(--icon-size, 68px); font-weight: 300; line-height: 1.15; }
+        #window-layer .tile-title { max-width: 78%; font-size: var(--label-size, 18px); font-weight: 500; line-height: 1.3; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+        #map-toolbar { position: fixed; inset: 0 0 auto; z-index: 10; display: flex; align-items: center; justify-content: space-between; height: 64px; padding: 0 24px; gap: 12px; }
+        #map-toolbar button, #map-zoom button { min-width: 40px; min-height: 40px; border: 0; border-radius: 22px; color: #375d58; background: transparent; }
+        #map-toolbar button:hover, #map-zoom button:hover { background: #375d5810; }
+        #map-toolbar button:focus-visible, #map-zoom button:focus-visible { outline: 2px solid #375d58; outline-offset: 2px; }
+        #map-home { display: flex; align-items: center; gap: 10px; padding: 0 12px; font-size: 16px; font-weight: 500; letter-spacing: -.03em; }
+        #map-home span { font-size: 28px; font-weight: 300; }
+        #map-toolbar .map-actions { display: flex; align-items: center; gap: 8px; }
+        #map-new { padding: 0 14px; font-size: 13px; }
+        #map-settings { font-size: 21px; }
+        #map-zoom { position: fixed; bottom: 14px; right: 20px; z-index: 10; display: flex; align-items: center; border: 1px solid #dce2dc; border-radius: 24px; background: #f8f9f5ee; }
+        #map-zoom button { font-size: 22px; }
+        #map-scale { min-width: 42px; text-align: center; font-size: 11px; font-variant-numeric: tabular-nums; color: #68766f; }
+        #map-hint { position: fixed; bottom: 25px; left: 28px; color: #68766f; font-size: 12px; pointer-events: none; }
+        @media (max-width: 599px) {
+            #desktop { inset: 60px 0 54px; }
+            #map-toolbar { height: 60px; padding: 0 8px; }
+            #map-home { font-size: 14px; }
+            #map-new { font-size: 12px; padding: 0 8px; }
+            #map-hint { left: 20px; bottom: 28px; max-width: calc(100% - 172px); font-size: 11px; }
+            #map-zoom { right: 12px; bottom: 14px; }
+        }
         .desktop-window button, .desktop-window summary { touch-action: manipulation; }
         .desktop-window button:disabled { opacity: .45; cursor: default; }
-        .desktop-window :is(button, summary, input, textarea, select) { border-radius: 0; box-shadow: none; }
+        .desktop-window :is(button, summary, input, textarea, select) { border-radius: 8px; box-shadow: none; }
         .desktop-window :is(button, summary, input, textarea, select):focus-visible { outline: 2px solid var(--tile); outline-offset: 3px; }
         .desktop-window .ui-body { flex: 1; min-height: 0; overflow: auto; padding: 16px; }
         .desktop-window .ui-label { display: grid; gap: 6px; color: var(--muted); font-size: 12px; }
@@ -81,28 +94,13 @@
         .core-panel .core-meta { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 4px 12px; margin-top: 9px; color: var(--muted); font-size: 11px; }
         .core-panel #model-btn { max-width: 190px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
         @media (pointer: coarse) { .desktop-window button, .desktop-window summary { min-height: 44px; } .desktop-window .ui-field, .core-panel #user-prompt { font-size: 16px; } }
-        @media (max-width: 799px), (pointer: coarse) {
-            #desktop { inset: 0; }
-            #desktop-dock { display: none; }
-            #window-layer { display: flex; flex-direction: column; gap: 12px; padding: 12px; }
-            #window-layer.has-maximized::after { display: none; }
-            #window-layer > .desktop-window { position: relative !important; left: auto !important; top: auto !important; width: 100% !important; height: auto !important; flex: none; }
-            #window-layer > .desktop-window.is-collapsed > :not(.window-header) { display: none !important; }
-            #window-layer > .desktop-window > .window-header { cursor: pointer; touch-action: pan-y; }
-            #window-layer .window-controls button { width: 44px; height: 44px; }
-            #window-layer .ui-body { flex: none; overflow: visible; }
-            #window-layer #activity-log { flex: none; max-height: 45dvh; }
-            #window-layer > .desktop-window[data-maximized="true"]:not(.is-collapsed) { position: fixed !important; inset: 12px !important; width: calc(100% - 24px) !important; height: calc(100dvh - 24px) !important; }
-            #window-layer > .desktop-window[data-maximized="true"]:not(.is-collapsed) :is(.ui-body, #activity-log) { flex: 1; min-height: 0; max-height: none; overflow: auto; }
-            #window-layer.has-maximized > .desktop-window:is(.is-collapsed, :not([data-maximized="true"])) { display: none !important; }
-        }
     </style>
 </head>
 <body class="overflow-hidden relative w-screen h-screen">
 
-    <main id="desktop" aria-label="Desktop" tabindex="0"><div id="window-layer">
+    <main id="desktop" aria-label="Application map" tabindex="0"><div id="window-layer">
     <!-- GENESIS WINDOW: CORE -->
-    <div id="ouroboros-core" class="draggable resizable core-panel select-none" data-window-title="Ouroboros" data-width="360" data-height="588">
+    <div id="ouroboros-core" class="draggable resizable core-panel select-none" data-window-title="Ouroboros">
         <!-- Header -->
         <div class="window-header cursor-move px-4 py-3 flex shrink-0 justify-between items-center gap-2">
             <h1>Ouroboros</h1>
@@ -110,7 +108,7 @@
 
         <!-- Activity Log -->
         <div id="activity-log" class="select-text" aria-label="Conversation">
-            <div id="empty-state" class="core-empty"><p class="text-3xl font-light text-[var(--tile)] mb-3">Make room<br>for an idea.</p><p class="text-sm">Describe a tool or a page.<br>It becomes a tile on your desktop.</p></div>
+            <div id="empty-state" class="core-empty"><p class="text-3xl font-light text-[var(--tile)] mb-3">Make room<br>for an idea.</p><p class="text-sm">Describe a tool or a page.<br>It joins your app map.</p></div>
         </div>
         <button id="undo-btn" type="button" class="core-quiet" hidden>↶ Undo this change</button>
 
@@ -127,7 +125,7 @@
         </div>
     </div>
 
-    <section id="ouroboros-settings" class="draggable resizable core-panel" data-window-title="Settings" data-width="360" data-height="588" hidden>
+    <section id="ouroboros-settings" class="draggable resizable core-panel" data-window-title="Settings" hidden>
         <div class="window-header"><h2>Settings</h2></div>
         <div id="settings-panel" class="core-settings ui-body">
             <section class="settings-section" aria-labelledby="connection-title">
@@ -160,7 +158,7 @@
                 </div>
                 <p class="text-xs text-[var(--muted)]">Versions are saved after each task. The last 10 tasks are available here.</p>
                 <div class="flex flex-wrap gap-2">
-                    <button id="arrange-settings-btn" type="button" class="ui-button is-secondary">Arrange tiles</button>
+                    <button id="arrange-settings-btn" type="button" class="ui-button is-secondary">Show all apps</button>
                     <button id="export-btn" type="button" class="ui-button is-secondary">Export HTML</button>
                     <button id="import-btn" type="button" class="ui-button is-secondary">Import HTML</button>
                     <button id="import-backup-btn" type="button" class="ui-button is-secondary" hidden>Restore backup</button>
@@ -172,9 +170,14 @@
         </div>
     </section>
     </div></main>
-    <nav id="desktop-dock" aria-label="Open windows">
-        <button id="arrange-btn" type="button" title="Arrange visible tiles with even gaps"><span class="dock-icon" aria-hidden="true">▦</span><span class="dock-title">Arrange</span></button>
-    </nav>
+    <header id="map-toolbar">
+        <button id="map-home" type="button" aria-label="All apps" title="All apps · Esc"><span aria-hidden="true">∞</span> Ouroboros</button>
+        <div class="map-actions"><button id="map-new" type="button">+ New app</button><button id="map-settings" type="button" aria-label="Open Settings" title="Settings">⚙</button></div>
+    </header>
+    <p id="map-hint">Drag to explore · Scroll to zoom</p>
+    <div id="map-zoom" role="group" aria-label="Map zoom">
+        <button id="map-zoom-out" type="button" aria-label="Zoom out">−</button><output id="map-scale" aria-label="Zoom level">70%</output><button id="map-zoom-in" type="button" aria-label="Zoom in">+</button>
+    </div>
 
     <!-- EMBEDDED SYSTEM PROMPT (editable by users) -->
     <script type="text/plain" id="ouroboros-system_prompt">
@@ -199,9 +202,9 @@ The page is rebuilt on every load by replaying all recorded run_js scripts, in o
 - When updating an older tile, inspect its current content and existing storage first, then migrate that data with `setState` before replacing its UI. Always initialize the rebuilt view from `getState`.
 
 ## Rules
-- Never modify or remove #ouroboros-core, #ouroboros-settings, #desktop-dock, the desktop containers, or the ouroboros-* script blocks. You may append windows to #window-layer.
-- Build each feature as a window with a stable unique id and classes `draggable resizable`. Give it a direct `.window-header` child containing an h2 title, and a `.ui-body` content area. Append it to #window-layer. Optional data-width and data-height set the preferred desktop size in pixels. On computers, windows expand across a horizontal canvas with drag, resize, minimize, maximize and Dock controls; overlap is allowed and Arrange packs windows when requested. On phones, tiles form a full-width vertical list with in-place collapse and a focused full-screen view. The host manages these controls and positions; keep content responsive and do not build your own window controls.
-- Use the shared controls: `ui-label` for labels, `ui-field` for inputs/selects/textareas, `ui-button` for primary actions, `ui-button is-secondary` for secondary actions. The desktop keeps Windows 8's square tile geometry with warm-white content, dark text and clear typography. Each new window automatically receives a stable color from a coordinated muted palette of teal, blue, plum, clay, olive and rose; keep that color and use `var(--accent)` for emphasis, `var(--tint)` for subtle highlights and `var(--muted)` for secondary text. The desktop supplies 14px body text, 16px content padding, borders and focus styles. Use Tailwind for layout with 8px or 16px gaps. Keep content backgrounds transparent, with no rounded corners, shadows, extra card shells or unrelated color palettes. Larger light-weight numbers work well for key metrics; custom visuals should follow the user's request.
+- Never modify or remove #ouroboros-core, #ouroboros-settings, #map-toolbar, #map-zoom, #map-hint, the desktop containers, or the ouroboros-* script blocks. You may append windows to #window-layer.
+- Build each feature as a window with a stable unique id and classes `draggable resizable`. Give it a direct `.window-header` child containing an h2 title, and a `.ui-body` content area. Append it to #window-layer. Optional data-window-icon supplies a short symbol for the tile. Previews are 320px square; the focused app expands to fit the viewport. Apps form a compact honeycomb map on both computers and phones. Zooming reveals their content and focuses one app; zooming out returns to tiles. The host handles all placement, zoom, focus and navigation; keep content responsive and do not build your own window controls.
+- Use the shared controls: `ui-label` for labels, `ui-field` for inputs/selects/textareas, `ui-button` for primary actions, `ui-button is-secondary` for secondary actions. The map uses circular colored tiles that open into softly rounded applications with warm-white content, dark text and clear typography. Each new window automatically receives a stable color from a coordinated muted palette of teal, blue, plum, clay, olive and rose; keep that color and use `var(--accent)` for emphasis, `var(--tint)` for subtle highlights and `var(--muted)` for secondary text. The desktop supplies 14px body text, 16px content padding, borders and focus styles. Use Tailwind for layout with 8px or 16px gaps. Keep content backgrounds transparent, without extra card shells, heavy shadows or unrelated color palettes. Larger light-weight numbers work well for key metrics; custom visuals should follow the user's request.
 - Keep code compact. No large inline images or data URIs.
 - Verify your work with read_dom or eval_js before finishing. When done, reply with a one-line summary and no tool calls. Ask the user only when the request is truly ambiguous.
 - Web access: `fetch('https://r.jina.ai/' + url)` returns readable Markdown; `fetch('https://corsproxy.io/?url=' + encodeURIComponent(url))` returns raw HTML.
@@ -216,7 +219,7 @@ The page is rebuilt on every load by replaying all recorded run_js scripts, in o
         // --- CONSTANTS ---
         const MAX_STEPS = 40;
         const SETTINGS_KEY = 'ouroboros:settings';
-        const HARNESS = '#ouroboros-core, #ouroboros-settings, #desktop-dock, #ouroboros-system_prompt, #ouroboros-state';
+        const HARNESS = '#ouroboros-core, #ouroboros-settings, #map-toolbar, #map-zoom, #map-hint, #ouroboros-system_prompt, #ouroboros-state';
         const AsyncFunction = Object.getPrototypeOf(async function () {}).constructor;
         const $ = id => document.getElementById(id);
 
@@ -226,7 +229,8 @@ The page is rebuilt on every load by replaying all recorded run_js scripts, in o
         // The pristine page is captured before any mutation is replayed; export = pristine + content.
         const pristine = '<!DOCTYPE html>\n' + document.documentElement.outerHTML;
         const embedded = JSON.parse($('ouroboros-state').textContent);
-        const CONTENT_KEY = `ouroboros:${embedded.savedAt ?? 'live'}`;
+        const ORIGINAL_CONTENT_KEY = `ouroboros:${embedded.savedAt ?? 'live'}`;
+        const CONTENT_KEY = `ouroboros:watch:${embedded.savedAt ?? 'live'}`;
         const load = key => { try { return JSON.parse(localStorage.getItem(key)); } catch { return null; } };
         const storedSettings = load(SETTINGS_KEY);
         const settings = {
@@ -235,7 +239,8 @@ The page is rebuilt on every load by replaying all recorded run_js scripts, in o
             model: storedSettings?.model || $('model').defaultValue,
             usage: storedSettings?.usage ?? { input: 0, output: 0, responses: 0, lastTask: null },
         };
-        const saved = load(CONTENT_KEY) ?? embedded;
+        // Seed the experiment from the existing workspace; all later writes stay in its own slot.
+        const saved = load(CONTENT_KEY) ?? load(ORIGINAL_CONTENT_KEY) ?? embedded;
         const state = {
             history: saved.history,
             mutations: saved.mutations,
@@ -324,7 +329,7 @@ The page is rebuilt on every load by replaying all recorded run_js scripts, in o
                 name: 'run_js',
                 description: 'Mutate the page with JavaScript. Recorded and replayed in order on every page load, so it must be self-contained and idempotent. Failed scripts are not recorded.',
                 parameters: CODE_SCHEMA,
-                run: async ({ code }, task) => { const out = await runJs(code); state.mutations.push({ task, code }); syncWindows(true); rememberWindows(); return out; },
+                run: async ({ code }, task) => { const out = await runJs(code); state.mutations.push({ task, code }); syncWindows(); rememberWindows(); return out; },
             },
         ];
         const TOOL_SCHEMAS = TOOLS.map(({ run, ...schema }) => ({ type: 'function', strict: true, ...schema }));
@@ -416,7 +421,7 @@ The page is rebuilt on every load by replaying all recorded run_js scripts, in o
                 let saved = false;
                 try {
                     if (responded) {
-                        syncWindows(true); rememberWindows();
+                        syncWindows(); rememberWindows();
                         saveTask(task, prompt, summary || '(done)', before); saved = true;
                     }
                 } catch (e) { log('error', `Could not save this task: ${e.message}`, task); }
@@ -445,7 +450,7 @@ The page is rebuilt on every load by replaying all recorded run_js scripts, in o
                 if (m.layout) { applyLayout(m.layout); continue; }
                 try { await new AsyncFunction(m.code)(); }
                 catch (e) { failed++; console.error('Replay failed:', e, m.code); noteError(`Replay of a recorded script failed: ${e.message}`); }
-                syncWindows(true);
+                syncWindows();
             }
             const n = state.mutations.filter(m => m.code).length;
             if (n) log('system', `Replayed ${n} mutation(s)${failed ? `, ${failed} failed (see console)` : ''}.`);
@@ -453,7 +458,7 @@ The page is rebuilt on every load by replaying all recorded run_js scripts, in o
 
         function exportHtml() {
             if (busy || controller || importing) return;
-            syncWindows(true); rememberWindows(false);
+            syncWindows(); rememberWindows(false);
             const json = JSON.stringify({ ...state, savedAt: Date.now() }).replace(/</g, '\\u003c');
             const html = pristine
                 .replace(/<[s]tyle[^>]*>[\s\S]*?<\/[s]tyle>/g, s => /tailwindcss|--tw-/.test(s) ? '' : s)
@@ -537,303 +542,265 @@ The page is rebuilt on every load by replaying all recorded run_js scripts, in o
                 ? 'Reset to the exported snapshot? Everything done since the export is discarded; settings are kept.'
                 : 'Reset the page to its pristine state? Mutations and history are cleared; settings are kept.';
             if (!confirm(message + (importBackup ? ' The import backup will also be cleared.' : ''))) return;
-            localStorage.removeItem(CONTENT_KEY);
+            localStorage.setItem(CONTENT_KEY, JSON.stringify(embedded));
             busy = true;
             location.reload();
         }
 
-        // --- DESKTOP WINDOWS ---
-        const GRID = 12, EDGE = 16;
+        // --- APP MAP ---
+        const TILE_SIZE = 320, SPACING = 384, FOCUS_START = 1.18, FOCUS_END = 1.9;
         const TILE_COLORS = [
             ['#375d58', '#e5eeeb'], ['#4a607c', '#e7edf4'], ['#715d7b', '#efe9f2'],
             ['#895f50', '#f3e9e3'], ['#66704e', '#edf0e3'], ['#825d6e', '#f3e8ee'],
         ];
-        const desktop = $('desktop'), layer = $('window-layer'), dock = $('desktop-dock');
-        const mobileLayout = matchMedia('(max-width: 799px), (pointer: coarse)');
-        const isMobile = () => mobileLayout.matches;
-        const windows = new Map();
-        let windowSerial = 0, nextTone = 0, topZ = 50, activeWindow = 'ouroboros-core';
-        const overlaps = (a, b) => a.x < b.x + b.w + GRID && b.x < a.x + a.w + GRID && a.y < b.y + b.h + GRID && b.y < a.y + a.h + GRID;
+        const desktop = $('desktop'), layer = $('window-layer'), windows = new Map();
+        const camera = { x: 0, y: 0, zoom: .7, focus: null };
+        const clamp = (n, min, max) => Math.min(max, Math.max(min, n));
+        const mix = (a, b, t) => a + (b - a) * t;
+        const smooth = t => t * t * (3 - 2 * t);
+        let windowSerial = 0, nextTone = 0, animation = 0;
 
-        function fitWindow({ x = EDGE, y = EDGE, w = 360, h = 288 }) {
-            const maxW = Math.max(GRID, Math.floor((desktop.clientWidth - EDGE * 2) / GRID) * GRID);
-            const maxH = Math.max(GRID, Math.floor((desktop.clientHeight - EDGE * 2) / GRID) * GRID);
-            w = Math.min(maxW, Math.max(Math.min(240, maxW), Math.round(parseFloat(w) / GRID) * GRID));
-            h = Math.min(maxH, Math.max(Math.min(192, maxH), Math.round(parseFloat(h) / GRID) * GRID));
-            return { x: Math.max(EDGE, EDGE + Math.round((x - EDGE) / GRID) * GRID), y: Math.max(EDGE, EDGE + Math.round((y - EDGE) / GRID) * GRID), w, h };
-        }
-
-        function emptyPosition(size, except) {
-            const rect = fitWindow(size);
-            const occupied = [...windows.values()].filter(w => w !== except && (isMobile() || !w.minimized)).map(w => w.rect);
-            if (isMobile()) return { ...rect, x: EDGE, y: Math.max(EDGE, ...occupied.map(r => r.y + r.h + GRID)) };
-            const right = Math.max(EDGE, ...occupied.map(r => r.x + r.w + GRID));
-            const bottom = Math.max(EDGE, desktop.clientHeight - EDGE - rect.h);
-            for (let x = EDGE; x <= right; x += GRID) {
-                for (let y = EDGE; y <= bottom; y += GRID) {
-                    if (occupied.every(r => !overlaps({ ...rect, x, y }, r))) return { ...rect, x, y };
+        function layoutApps() {
+            const slots = [{ x: 0, y: 0 }];
+            for (let ring = 1; slots.length < windows.size; ring++) {
+                let q = ring, r = 0;
+                for (const [dq, dr] of [[-1, 1], [-1, 0], [0, -1], [1, -1], [1, 0], [0, 1]]) {
+                    for (let step = 0; step < ring; step++, q += dq, r += dr) slots.push({ x: (q + r / 2) * SPACING, y: r * SPACING * Math.sqrt(3) / 2 });
                 }
             }
-            return { ...rect, x: right, y: EDGE };
+            [...windows.values()].forEach((win, i) => Object.assign(win, slots[i]));
         }
 
-        function drawWindow(win) {
-            const [accent, tint] = TILE_COLORS[win.tone];
-            for (const el of [win.el, win.button]) { el.style.setProperty('--tile', accent); el.style.setProperty('--tint', tint); }
-            const rect = win.maximized
-                ? { x: EDGE, y: EDGE, w: desktop.offsetWidth - EDGE * 2, h: desktop.offsetHeight - EDGE * 2 }
-                : win.rect;
-            Object.assign(win.el.style, { position: win.maximized ? 'fixed' : 'absolute', left: `${rect.x}px`, top: `${rect.y}px`, width: `${rect.w}px`, height: `${rect.h}px`, transform: 'none' });
-            win.el.hidden = win.minimized && !isMobile();
-            win.el.classList.toggle('is-collapsed', isMobile() && win.minimized);
-            win.el.dataset.maximized = String(win.maximized);
-            win.button.classList.toggle('is-minimized', win.minimized);
-            const minimize = win.el.querySelector('.window-controls button');
-            minimize.dataset.windowAction = isMobile() && win.minimized ? 'show' : 'minimize';
-            minimize.textContent = isMobile() && win.minimized ? '+' : '−';
-            minimize.setAttribute('aria-label', isMobile() ? (win.minimized ? 'Expand tile' : 'Collapse tile') : 'Minimize window');
-            minimize.setAttribute('aria-expanded', String(!win.minimized));
-            const maximize = win.el.querySelector('.window-controls [data-window-action="maximize"]');
-            maximize.textContent = win.maximized ? (isMobile() ? '←' : '❐') : '□';
-            maximize.setAttribute('aria-label', win.maximized ? (isMobile() ? 'Back to tiles' : 'Restore window size') : (isMobile() ? 'Focus tile' : 'Maximize window'));
-        }
-
-        function focusWindow(win, reveal = false) {
-            for (const other of windows.values()) {
-                if (other !== win && other.maximized && !other.minimized) { other.maximized = false; drawWindow(other); }
-            }
-            activeWindow = win.el.id;
-            win.el.style.zIndex = ++topZ;
-            for (const other of windows.values()) {
-                const active = other.el.id === activeWindow && !other.minimized;
-                other.el.classList.toggle('is-active', active);
-                other.button.classList.toggle('is-active', active);
-                other.button.setAttribute('aria-pressed', String(active));
-            }
-            updateDesktopBounds();
-            if (reveal && !win.maximized) win.el.scrollIntoView({ block: 'nearest', inline: 'nearest' });
-        }
-
-        function updateDesktopBounds() {
-            const maximized = [...windows.values()].find(w => !w.minimized && w.maximized);
-            layer.classList.toggle('has-maximized', !!maximized);
+        function renderMap() {
+            const detail = smooth(clamp((camera.zoom - .82) / .32, 0, 1));
+            const focus = smooth(clamp((camera.zoom - FOCUS_START) / (FOCUS_END - FOCUS_START), 0, 1));
+            const width = desktop.clientWidth, height = desktop.clientHeight;
+            desktop.classList.toggle('has-focus', focus > .95);
             for (const win of windows.values()) {
-                const inert = !!maximized && win !== maximized;
-                if (win.el.inert !== inert) win.el.inert = inert;
+                const selected = win.el.id === camera.focus, amount = selected ? focus : 0;
+                const scale = mix(camera.zoom, 1, amount);
+                const w = mix(TILE_SIZE * camera.zoom, width - 24, amount), h = mix(TILE_SIZE * camera.zoom, height - 24, amount);
+                const x = mix(width / 2 + (win.x - camera.x - TILE_SIZE / 2) * camera.zoom, 12, amount);
+                const y = mix(height / 2 + (win.y - camera.y - TILE_SIZE / 2) * camera.zoom, 12, amount);
+                const interactive = selected && focus > .95;
+                Object.assign(win.el.style, { width: `${w / scale}px`, height: `${h / scale}px`, transform: `translate(${x}px, ${y}px) scale(${scale})`, zIndex: selected ? '3' : '1', filter: selected ? 'none' : `blur(${focus * 7 / scale}px)`, opacity: selected ? '1' : String(1 - focus * .75) });
+                win.el.style.setProperty('--detail', detail);
+                win.el.style.setProperty('--radius', `${mix(TILE_SIZE / 2, 22, detail)}px`);
+                win.el.style.setProperty('--label-size', `${Math.max(18, 12 / camera.zoom)}px`);
+                win.el.style.setProperty('--icon-size', `${Math.max(68, 28 / camera.zoom)}px`);
+                const entering = interactive && !win.el.classList.contains('is-focused');
+                win.el.classList.toggle('is-focused', interactive);
+                win.el.inert = focus > .15 && !selected;
+                win.face.hidden = interactive;
+                win.face.querySelector('.tile-title').hidden = camera.zoom < .23;
+                for (const child of win.el.children) if (child !== win.face) child.inert = !interactive;
+                if (entering) win.el.focus({ preventScroll: true });
             }
-            if (isMobile()) {
-                [...windows.values()].sort((a, b) => a.rect.y - b.rect.y || a.rect.x - b.rect.x).forEach((win, index) => {
-                    if (layer.children[index] !== win.el) layer.insertBefore(win.el, layer.children[index] || null);
-                });
-                if (layer.style.width !== '100%') layer.style.width = '100%';
-                if (layer.style.height !== 'auto') layer.style.height = 'auto';
+            $('map-scale').textContent = `${Math.round(camera.zoom * 100)}%`;
+            $('map-hint').textContent = focus > .95 ? 'All apps or Esc to return' : matchMedia('(pointer: coarse)').matches ? 'Drag to explore · Pinch to zoom' : 'Drag to explore · Scroll to zoom';
+        }
+
+        function moveCamera(next, animate = true, done = () => {}) {
+            cancelAnimationFrame(animation);
+            if (!animate || matchMedia('(prefers-reduced-motion: reduce)').matches) { Object.assign(camera, next); renderMap(); done(); return; }
+            const from = { ...camera }, start = performance.now();
+            const frame = now => {
+                const t = clamp((now - start) / 360, 0, 1), ease = 1 - (1 - t) ** 3;
+                for (const key of ['x', 'y', 'zoom']) camera[key] = mix(from[key], next[key] ?? from[key], ease);
+                renderMap();
+                if (t < 1) animation = requestAnimationFrame(frame);
+                else done();
+            };
+            animation = requestAnimationFrame(frame);
+        }
+
+        function overview(animate = true) {
+            if (!windows.size) return;
+            const tiles = [...windows.values()];
+            const left = Math.min(...tiles.map(w => w.x)) - TILE_SIZE / 2, right = Math.max(...tiles.map(w => w.x)) + TILE_SIZE / 2;
+            const top = Math.min(...tiles.map(w => w.y)) - TILE_SIZE / 2, bottom = Math.max(...tiles.map(w => w.y)) + TILE_SIZE / 2;
+            moveCamera({ x: (left + right) / 2, y: (top + bottom) / 2, zoom: clamp(Math.min((desktop.clientWidth - 56) / (right - left), (desktop.clientHeight - 56) / (bottom - top)), .12, .78) }, animate);
+        }
+
+        function focusApp(id, animate = true) {
+            const win = windows.get(id);
+            if (!win) return;
+            if (camera.zoom > FOCUS_START && camera.focus !== id) {
+                moveCamera({ zoom: FOCUS_START }, animate, () => focusApp(id, animate));
                 return;
             }
-            const visible = [...windows.values()].filter(w => !w.minimized && !w.maximized);
-            // CSS handles the viewport minimum without feeding scrollbar-dependent client sizes back into the canvas.
-            const right = Math.ceil(Math.max(0, ...visible.map(w => w.rect.x + w.rect.w + EDGE)));
-            const bottom = Math.ceil(Math.max(0, ...visible.map(w => w.rect.y + w.rect.h + EDGE)));
-            if (layer.style.width !== `${right}px`) layer.style.width = `${right}px`;
-            if (layer.style.height !== `${bottom}px`) layer.style.height = `${bottom}px`;
+            camera.focus = id;
+            moveCamera({ x: win.x, y: win.y, zoom: FOCUS_END }, animate);
         }
 
-        function syncWindows(readSizes = false) {
+        function zoomAt(zoom, x = desktop.clientWidth / 2, y = desktop.clientHeight / 2) {
+            cancelAnimationFrame(animation);
+            const next = clamp(zoom, .12, FOCUS_END), dx = x - desktop.clientWidth / 2, dy = y - desktop.clientHeight / 2;
+            const world = { x: camera.x + dx / camera.zoom, y: camera.y + dy / camera.zoom };
+            if (camera.zoom < FOCUS_START && next >= FOCUS_START) {
+                camera.focus = [...windows.values()].sort((a, b) => Math.hypot(a.x - world.x, a.y - world.y) - Math.hypot(b.x - world.x, b.y - world.y))[0]?.el.id;
+            }
+            camera.x = world.x - dx / next; camera.y = world.y - dy / next; camera.zoom = next;
+            renderMap();
+        }
+
+        function syncWindows() {
+            let changed = false, added = null;
             for (const [id, win] of windows) {
-                if ((!win.el.isConnected || win.el.id !== id) && !$(id)?.matches('.draggable.resizable')) { win.button.remove(); windows.delete(id); }
+                if ((!win.el.isConnected || win.el.id !== id) && !$(id)?.matches('.draggable.resizable')) { windows.delete(id); changed = true; }
             }
             for (const el of document.querySelectorAll('.draggable.resizable')) {
                 if (el.parentElement.closest('.draggable.resizable')) continue;
                 if (!el.id) el.id = `window-${++windowSerial}`;
-                let win = windows.get(el.id);
-                let header = el.querySelector(':scope > .window-header');
+                let win = windows.get(el.id), header = el.querySelector(':scope > .window-header');
                 if (!header) { header = document.createElement('div'); header.className = 'window-header'; header.textContent = el.id; el.prepend(header); }
                 if (!win || win.el !== el) {
-                    const measured = el.getBoundingClientRect();
-                    const rect = win?.rect ?? emptyPosition({ w: +el.dataset.width || measured.width || parseFloat(el.style.width) || 360, h: +el.dataset.height || measured.height || parseFloat(el.style.height) || 288 });
-                    const button = win?.button ?? document.createElement('button');
-                    button.type = 'button'; button.dataset.window = el.id;
-                    if (!win) { button.innerHTML = '<span class="dock-icon" aria-hidden="true"></span><span class="dock-title"></span>'; dock.append(button); }
-                    win = { el, button, rect, tone: win?.tone ?? nextTone++ % TILE_COLORS.length, minimized: win?.minimized ?? el.hidden, maximized: win?.maximized ?? false };
+                    const face = document.createElement('button');
+                    face.type = 'button'; face.className = 'tile-face';
+                    face.innerHTML = '<span class="tile-icon" aria-hidden="true"></span><span class="tile-title"></span>';
+                    win = { el, face, tone: win?.tone ?? nextTone++ % TILE_COLORS.length, title: '' };
                     windows.set(el.id, win);
                     if (el.parentElement !== layer) layer.append(el);
-                    el.classList.add('desktop-window');
-                    el.setAttribute('role', 'region');
-                    if (!header.querySelector('.window-controls')) header.insertAdjacentHTML('beforeend', '<div class="window-controls"><button type="button" data-window-action="minimize" aria-label="Minimize window" title="Minimize">−</button><button type="button" data-window-action="maximize" aria-label="Maximize window" title="Maximize / restore">□</button></div>');
-                    for (const control of header.querySelectorAll('.window-controls button')) control.disabled = busy;
-                    button.disabled = busy;
-                    drawWindow(win);
-                    if (!busy && !win.minimized) { updateDesktopBounds(); focusWindow(win, true); }
-                } else if (readSizes && !win.maximized && !win.minimized) {
-                    const w = parseFloat(el.style.width) || win.rect.w, h = parseFloat(el.style.height) || win.rect.h;
-                    if (w !== win.rect.w || h !== win.rect.h) {
-                        win.rect = fitWindow({ ...win.rect, w, h });
-                        drawWindow(win);
-                    }
+                    el.hidden = false; el.tabIndex = -1; el.classList.add('desktop-window'); el.setAttribute('role', 'region');
+                    header.querySelector('.window-controls')?.remove();
+                    header.insertAdjacentHTML('beforeend', '<div class="window-controls"><button type="button" data-window-action="minimize" aria-label="All apps" title="All apps">↙</button></div>');
+                    el.append(face); changed = true; added = el.id;
                 }
                 const title = el.dataset.windowTitle || header.querySelector('h1,h2,h3')?.textContent.trim() || el.id;
-                if (win.button.title !== title) {
-                    win.button.title = title;
-                    win.button.querySelector('.dock-title').textContent = title;
-                    win.button.querySelector('.dock-icon').textContent = Array.from(title)[0].toUpperCase();
-                    el.setAttribute('aria-label', title);
+                if (win.title !== title) {
+                    win.title = title; el.setAttribute('aria-label', title); win.face.setAttribute('aria-label', `Open ${title}`);
+                    win.face.querySelector('.tile-title').textContent = title;
                 }
+                const icon = el.dataset.windowIcon || (el.id === 'ouroboros-core' ? '∞' : el.id === 'ouroboros-settings' ? '⚙' : Array.from(title)[0].toUpperCase());
+                if (win.icon !== icon) { win.icon = icon; win.face.querySelector('.tile-icon').textContent = icon; }
+                Object.assign(el.style, { position: 'absolute', left: '0px', top: '0px', margin: '0px' });
+                el.style.setProperty('--tile', TILE_COLORS[win.tone][0]); el.style.setProperty('--tint', TILE_COLORS[win.tone][1]);
+                win.face.disabled = busy || importing;
             }
-            updateDesktopBounds();
+            if (changed) layoutApps();
+            if (camera.focus && !windows.has(camera.focus)) { camera.focus = null; overview(false); }
+            else if (added && !busy) focusApp(added);
+            else renderMap();
             renderTiles();
         }
 
         function rememberWindows(persist = true) {
             for (const [id, win] of windows) {
-                const layout = { id, ...win.rect, tone: win.tone, minimized: win.minimized, maximized: win.maximized };
+                const layout = { id, x: win.x, y: win.y, w: TILE_SIZE, h: TILE_SIZE, tone: win.tone };
                 const previous = state.mutations.findLast(m => m.layout?.id === id)?.layout;
-                if (JSON.stringify(previous) === JSON.stringify(layout)) continue;
-                state.mutations.push({ layout });
+                if (JSON.stringify(previous) !== JSON.stringify(layout)) state.mutations.push({ layout });
             }
             if (persist) saveContent();
         }
 
-        function arrangeWindows(record = true) {
-            if (record && (busy || controller || importing)) return;
-            const mobile = isMobile();
-            const tiles = [...windows.values()].filter(win => mobile || !win.minimized)
-                .sort((a, b) => mobile ? a.rect.y - b.rect.y || a.rect.x - b.rect.x : a.rect.x - b.rect.x || a.rect.y - b.rect.y);
-            if (!tiles.length) return;
-            const before = state.mutations.length, placed = [];
-            const area = tiles.reduce((sum, win) => sum + (win.rect.w + GRID) * (win.rect.h + GRID), 0);
-            const ratio = desktop.clientWidth / Math.max(1, desktop.clientHeight);
-            const targetW = Math.max(...tiles.map(win => win.rect.w), Math.sqrt(area * ratio));
-            const targetH = Math.max(...tiles.map(win => win.rect.h), Math.sqrt(area / ratio));
-            // Try slots along existing edges, balancing compactness with distance from the old position.
-            let right = EDGE, bottom = EDGE, changed = false;
-            for (const win of tiles) {
-                const rect = fitWindow(win.rect);
-                let best = null, score = Infinity;
-                if (mobile) best = { ...rect, x: EDGE, y: bottom };
-                else for (const x of new Set([EDGE, ...placed.map(r => r.x + r.w + GRID)])) {
-                    for (const y of new Set([EDGE, ...placed.map(r => r.y + r.h + GRID)])) {
-                        const candidate = { ...rect, x, y };
-                        if (y + rect.h > desktop.clientHeight - EDGE || placed.some(r => overlaps(candidate, r))) continue;
-                        const width = Math.max(right, x + rect.w) - EDGE, height = Math.max(bottom, y + rect.h) - EDGE;
-                        const movement = Math.abs(x - win.rect.x) / desktop.clientWidth + Math.abs(y - win.rect.y) / desktop.clientHeight;
-                        const cost = (width / targetW) ** 2 + (height / targetH) ** 2 + .08 * movement;
-                        if (cost < score) { best = candidate; score = cost; }
-                    }
-                }
-                best ??= { ...rect, x: right + GRID, y: EDGE };
-                changed ||= win.maximized || JSON.stringify(best) !== JSON.stringify(win.rect);
-                win.rect = best; win.maximized = false;
-                placed.push(best); right = Math.max(right, best.x + best.w);
-                bottom = mobile ? best.y + (win.minimized ? 60 : best.h) + GRID : Math.max(bottom, best.y + best.h);
-                drawWindow(win);
+        function applyLayout({ id, tone }) {
+            const win = windows.get(id);
+            if (win && TILE_COLORS[tone]) {
+                win.tone = tone;
+                win.el.style.setProperty('--tile', TILE_COLORS[tone][0]); win.el.style.setProperty('--tint', TILE_COLORS[tone][1]);
             }
-            updateDesktopBounds(); desktop.scrollLeft = 0; desktop.scrollTop = 0;
-            if (!changed) return;
-            try {
-                rememberWindows();
-                if (record) {
-                    const task = Date.now();
-                    saveTask(task, 'Arrange tiles', 'Layout arranged.', before);
-                    log('user', 'Arrange tiles', task); log('assistant', 'Layout arranged.', task); setRunning(false);
-                }
-            } catch (e) { log('error', `Could not save layout: ${e.message}`); }
+        }
+
+        function windowAction(id, action) {
+            if (action === 'minimize') overview();
+            else focusApp(id);
         }
 
         function uninstallWindow(id) {
             const win = windows.get(id);
             if (!win || win.el.matches(HARNESS) || busy || controller || importing) return;
-            if (!confirm(`Uninstall ${win.button.title}? You can undo this change from history.`)) return;
+            if (!confirm(`Uninstall ${win.title}? You can undo this change from history.`)) return;
             const task = Date.now(), before = state.mutations.length;
-            const prompt = `Uninstall ${win.button.title}`, summary = 'Tile uninstalled.';
+            const prompt = `Uninstall ${win.title}`, summary = 'Tile uninstalled.';
             try {
                 win.el.remove();
                 state.mutations.push({ task, code: `document.getElementById(${JSON.stringify(id)})?.remove();` });
                 syncWindows(); rememberWindows();
                 saveTask(task, prompt, summary, before);
-                log('user', prompt, task); log('assistant', summary, task);
-                setRunning(false);
+                log('user', prompt, task); log('assistant', summary, task); setRunning(false);
             } catch (e) { log('error', `Could not uninstall tile: ${e.message}`); }
-        }
-
-        function windowAction(id, action) {
-            const win = windows.get(id);
-            if (!win) return;
-            win.minimized = action === 'minimize';
-            if (isMobile() && win.minimized) win.maximized = false;
-            if (action === 'maximize') win.maximized = !win.maximized;
-            drawWindow(win);
-            updateDesktopBounds();
-            if (!win.minimized) focusWindow(win, true);
-            else {
-                const next = [...windows.values()].filter(w => !w.minimized).sort((a, b) => +a.el.style.zIndex - +b.el.style.zIndex).at(-1);
-                if (next) focusWindow(next);
-                else { activeWindow = ''; win.button.classList.remove('is-active'); win.button.setAttribute('aria-pressed', 'false'); }
-            }
-            if (!busy) rememberWindows();
-        }
-
-        function applyLayout({ id, x, y, w, h, tone, minimized = false, maximized = false }) {
-            const win = windows.get(id);
-            if (!win) return;
-            win.rect = fitWindow({ x, y, w, h });
-            if (TILE_COLORS[tone]) win.tone = tone;
-            Object.assign(win, { minimized, maximized });
-            drawWindow(win);
-            if (maximized && !minimized) focusWindow(win);
-            updateDesktopBounds();
         }
 
         function setupWindows() {
             syncWindows();
-            focusWindow(windows.get('ouroboros-core'));
-            const finish = event => {
-                if (busy || importing || isMobile()) return;
-                const win = windows.get(event.target.id);
-                if (!win || win.maximized) return;
-                win.rect = fitWindow(win.rect);
-                drawWindow(win); updateDesktopBounds(); rememberWindows();
+            let drag = null, touch = null, suppressClick = false;
+            const point = e => { const box = desktop.getBoundingClientRect(); return { x: e.clientX - box.left, y: e.clientY - box.top }; };
+            const pan = (dx, dy) => { cancelAnimationFrame(animation); camera.x -= dx / camera.zoom; camera.y -= dy / camera.zoom; renderMap(); };
+            const canExplore = () => !desktop.classList.contains('has-focus');
+            desktop.addEventListener('pointerdown', e => {
+                if (e.pointerType === 'touch' || e.button !== 0 || !canExplore()) return;
+                drag = { x: e.clientX, y: e.clientY, distance: 0, face: e.target.closest('.tile-face') };
+                desktop.setPointerCapture(e.pointerId);
+            });
+            desktop.addEventListener('pointermove', e => {
+                if (!drag) return;
+                const dx = e.clientX - drag.x, dy = e.clientY - drag.y;
+                drag.distance += Math.hypot(dx, dy); drag.x = e.clientX; drag.y = e.clientY;
+                if (drag.distance > 4) { desktop.classList.add('is-panning'); pan(dx, dy); }
+            });
+            const endDrag = e => {
+                if (drag && e.type === 'pointerup') {
+                    suppressClick = true;
+                    if (drag.distance <= 4 && drag.face && !busy && !importing) focusApp(drag.face.closest('.desktop-window').id);
+                }
+                drag = null; desktop.classList.remove('is-panning');
             };
-            const interactions = interact('#window-layer > .desktop-window:not([data-maximized="true"])')
-                .draggable({
-                    enabled: !isMobile(),
-                    allowFrom: '.window-header', ignoreFrom: 'button, input, textarea, select, summary, a',
-                    listeners: { move: e => {
-                        const win = windows.get(e.target.id); if (busy || importing || isMobile() || !win || win.maximized) return;
-                        win.rect.x += e.dx; win.rect.y += e.dy;
-                        drawWindow(win); updateDesktopBounds();
-                    }, end: finish },
-                })
-                .resizable({
-                    enabled: !isMobile(),
-                    edges: { right: true, bottom: true },
-                    listeners: { move: e => {
-                        const win = windows.get(e.target.id); if (busy || importing || isMobile() || !win || win.maximized) return;
-                        Object.assign(win.rect, { w: Math.max(240, e.rect.width), h: Math.max(192, e.rect.height) });
-                        drawWindow(win); updateDesktopBounds();
-                    }, end: finish },
-                });
-            layer.addEventListener('pointerdown', e => { const win = windows.get(e.target.closest('.desktop-window')?.id); if (win) focusWindow(win); });
-            layer.addEventListener('click', e => {
+            desktop.addEventListener('pointerup', endDrag); desktop.addEventListener('pointercancel', endDrag);
+            desktop.addEventListener('click', e => {
+                if (suppressClick && e.detail) { suppressClick = false; return; }
                 if (busy || importing) return;
-                const button = e.target.closest('[data-window-action]');
-                if (button) windowAction(button.closest('.desktop-window').id, button.dataset.windowAction);
-                else if (isMobile() && e.target.closest('.window-header') && !e.target.closest('button, input, textarea, select, summary, a')) {
-                    const win = windows.get(e.target.closest('.desktop-window').id);
-                    windowAction(win.el.id, win.minimized ? 'show' : 'minimize');
+                const face = e.target.closest('.tile-face'), back = e.target.closest('[data-window-action]');
+                if (face) focusApp(face.closest('.desktop-window').id);
+                if (back) overview();
+            });
+            desktop.addEventListener('wheel', e => {
+                if (!e.ctrlKey && desktop.classList.contains('has-focus') && e.target.closest('.is-focused')) return;
+                e.preventDefault();
+                const p = point(e), delta = e.deltaY * (e.deltaMode === 1 ? 16 : e.deltaMode === 2 ? desktop.clientHeight : 1);
+                zoomAt(camera.zoom * Math.exp(-clamp(delta, -100, 100) * .003), p.x, p.y);
+            }, { passive: false });
+            const touchPoints = e => [...e.touches].map(point);
+            const midpoint = points => points.length > 1 ? { x: (points[0].x + points[1].x) / 2, y: (points[0].y + points[1].y) / 2 } : points[0];
+            const distance = points => points.length > 1 ? Math.hypot(points[0].x - points[1].x, points[0].y - points[1].y) : 0;
+            desktop.addEventListener('touchstart', e => {
+                if (e.touches.length < 2 && !canExplore()) return;
+                e.preventDefault();
+                const points = touchPoints(e);
+                touch = { p: midpoint(points), distance: distance(points), traveled: 0, moved: e.touches.length > 1, target: e.target.closest('.tile-face') };
+            }, { passive: false });
+            desktop.addEventListener('touchmove', e => {
+                if (!touch) return;
+                e.preventDefault();
+                const points = touchPoints(e), p = midpoint(points), d = distance(points);
+                const dx = p.x - touch.p.x, dy = p.y - touch.p.y;
+                if (d && touch.distance) zoomAt(camera.zoom * d / touch.distance, touch.p.x, touch.p.y);
+                if (canExplore()) pan(dx, dy);
+                touch.traveled += Math.hypot(dx, dy);
+                touch.moved ||= touch.traveled > 4 || d > 0;
+                Object.assign(touch, { p, distance: d });
+            }, { passive: false });
+            desktop.addEventListener('touchend', e => {
+                if (!touch) return;
+                if (e.touches.length) { const points = touchPoints(e); Object.assign(touch, { p: midpoint(points), distance: distance(points), moved: true }); return; }
+                if (!touch.moved && touch.target && !busy && !importing) focusApp(touch.target.closest('.desktop-window').id);
+                touch = null;
+            });
+            desktop.addEventListener('touchcancel', () => { touch = null; });
+            $('map-home').onclick = $('arrange-settings-btn').onclick = () => overview();
+            $('map-new').onclick = () => focusApp('ouroboros-core');
+            $('map-settings').onclick = () => focusApp('ouroboros-settings');
+            $('map-zoom-in').onclick = () => zoomAt(camera.zoom * 1.25);
+            $('map-zoom-out').onclick = () => zoomAt(camera.zoom / 1.25);
+            addEventListener('keydown', e => {
+                if (e.defaultPrevented || e.isComposing || e.ctrlKey || e.metaKey || e.altKey) return;
+                if (e.key === 'Escape') { e.preventDefault(); overview(); }
+                else if (!e.target.closest('input, textarea, select, [contenteditable="true"]')) {
+                    if (e.key === '+' || e.key === '=') zoomAt(camera.zoom * 1.25);
+                    if (e.key === '-') zoomAt(camera.zoom / 1.25);
+                    if (e.key === '0') overview();
                 }
             });
-            layer.addEventListener('dblclick', e => { if (!busy && !importing && !isMobile() && e.target.closest('.window-header') && !e.target.closest('button, summary, input')) windowAction(e.target.closest('.desktop-window').id, 'maximize'); });
-            dock.addEventListener('click', e => { const button = e.target.closest('[data-window]'); if (button && !busy && !importing) windowAction(button.dataset.window, 'show'); });
-            $('arrange-btn').onclick = $('arrange-settings-btn').onclick = () => arrangeWindows();
-            let wasMobile = isMobile();
-            addEventListener('resize', () => {
-                interactions.draggable(!isMobile()).resizable(!isMobile());
-                for (const [id, win] of windows) {
-                    if (isMobile()) drawWindow(win);
-                    else applyLayout({ id, ...win.rect, minimized: win.minimized, maximized: win.maximized });
-                }
-                if (wasMobile && !isMobile() && [...windows.values()].some(win => !win.minimized && win.rect.y + win.rect.h > desktop.clientHeight - EDGE)) arrangeWindows(false);
-                wasMobile = isMobile(); updateDesktopBounds();
-            });
+            addEventListener('resize', () => camera.zoom >= FOCUS_END ? renderMap() : overview(false));
         }
 
         // --- UI ---
@@ -904,7 +871,7 @@ The page is rebuilt on every load by replaying all recorded run_js scripts, in o
 
         function renderTiles() {
             const tiles = [...windows.values()].filter(win => !win.el.matches(HARNESS));
-            $('installed-tiles').innerHTML = tiles.map(win => `<li><span>${esc(win.button.title)}</span><button type="button" class="ui-button is-secondary is-danger shrink-0" data-uninstall="${esc(win.el.id)}" ${busy || controller || importing ? 'disabled' : ''}>Uninstall</button></li>`).join('')
+            $('installed-tiles').innerHTML = tiles.map(win => `<li><span>${esc(win.title)}</span><button type="button" class="ui-button is-secondary is-danger shrink-0" data-uninstall="${esc(win.el.id)}" ${busy || controller || importing ? 'disabled' : ''}>Uninstall</button></li>`).join('')
                 || '<li class="text-xs text-[var(--muted)]">No generated tiles yet.</li>';
         }
 
@@ -912,8 +879,8 @@ The page is rebuilt on every load by replaying all recorded run_js scripts, in o
             els.btn.textContent = on ? 'Stop' : 'Send ↑';
             els.btn.classList.toggle('is-running', on);
             els.btn.disabled = busy || importing;
-            for (const id of ['export-btn', 'import-btn', 'import-backup-btn', 'reset-btn', 'save-btn', 'arrange-btn', 'arrange-settings-btn']) $(id).disabled = busy || on || importing;
-            for (const button of document.querySelectorAll('.window-controls button, #desktop-dock [data-window]')) button.disabled = busy || importing;
+            for (const id of ['export-btn', 'import-btn', 'import-backup-btn', 'reset-btn', 'save-btn', 'arrange-settings-btn']) $(id).disabled = busy || on || importing;
+            for (const button of document.querySelectorAll('.window-controls button, .tile-face, #map-new, #map-settings')) button.disabled = busy || importing;
             const last = $(`task-${state.history.at(-1)?.task}`);
             els.undo.hidden = on || busy || importing || !last || !Number.isInteger(state.history.findLast(h => h.role === 'user')?.before);
             if (last) last.append(els.undo);
@@ -954,7 +921,6 @@ The page is rebuilt on every load by replaying all recorded run_js scripts, in o
                 try {
                     saveSettings();
                     $('model-btn').textContent = settings.model || 'Choose model';
-                    windowAction('ouroboros-settings', 'minimize');
                     windowAction('ouroboros-core', 'show');
                     els.status.textContent = 'Settings saved';
                 } catch (e) { log('error', `Could not save settings: ${e.message}`); }
@@ -987,7 +953,7 @@ The page is rebuilt on every load by replaying all recorded run_js scripts, in o
             setRunning(false);
             for (const h of state.history) log(h.role, h.content, h.task);
             await replay();
-            if (!state.mutations.some(m => m.code) && (!settings.apiKey || !settings.model)) windowAction('ouroboros-settings', 'show');
+            overview(false);
             busy = false;
             setRunning(false);
 
@@ -995,7 +961,7 @@ The page is rebuilt on every load by replaying all recorded run_js scripts, in o
             new MutationObserver(mutations => {
                 if (mutations.every(m => (m.target.nodeType === 1 ? m.target : m.target.parentElement)?.closest(HARNESS))) return;
                 if (!queued) { queued = true; requestAnimationFrame(() => { queued = false; syncWindows(); }); }
-            }).observe(document.body, { childList: true, subtree: true, attributes: true, characterData: true });
+            }).observe(document.body, { childList: true, subtree: true, attributes: true, attributeFilter: ['id', 'data-window-title', 'data-window-icon'], characterData: true });
         }
 
         init();
