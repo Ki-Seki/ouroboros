@@ -164,7 +164,7 @@
                     <button id="reset-btn" type="button" class="ui-button is-secondary is-danger">Reset canvas…</button>
                 </div>
                 <input id="import-file" type="file" accept=".html,.htm,text/html" hidden>
-                <p class="text-xs text-[var(--muted)]">Exports include saved tile data. Older tiles may need an update to save their content.</p>
+                <p class="text-xs text-[var(--muted)]">Exports include saved tile data.</p>
             </section>
         </div>
     </section>
@@ -193,7 +193,6 @@ The page is rebuilt on every load by replaying all recorded run_js scripts, in o
 - Make scripts idempotent: remove your existing element (`document.getElementById('x')?.remove()`) before recreating it. To change something built earlier, write a new script that replaces it.
 - A failed script may have partially changed the DOM: clean up and write a full corrected script.
 - Persist every tile's user data with `ouroboros.getState(tileId, defaultValue)` and `ouroboros.setState(tileId, value)`. Values must be JSON data. The getter returns a copy; save after user changes and render from that data. For example, read `{count: 0}` when creating a counter, then save the updated count in its click handler. This preserves content across reloads, exports, imports and history restore. Use this API for notes, tasks, editor text, progress and other user-owned content; do not store that content in localStorage, sessionStorage, IndexedDB or only in a closure. Keep the tile id stable when replacing it and preserve its existing data. The host restores saved data before replay; do not replace the `ouroboros` API.
-- When updating an older tile, inspect its current content and existing storage first, then migrate that data with `setState` before replacing its UI. Always initialize the rebuilt view from `getState`.
 
 ## Rules
 - Never modify or remove #ouroboros-core, #ouroboros-settings, #map-toolbar, the desktop containers, or the ouroboros-* script blocks. You may append windows to #window-layer.
@@ -225,7 +224,6 @@ The page is rebuilt on every load by replaying all recorded run_js scripts, in o
         // The pristine page is captured before any mutation is replayed; export = pristine + content.
         const pristine = '<!DOCTYPE html>\n' + document.documentElement.outerHTML;
         const embedded = JSON.parse($('ouroboros-state').textContent);
-        const ORIGINAL_CONTENT_KEY = `ouroboros:${embedded.savedAt ?? 'live'}`;
         const CONTENT_KEY = `ouroboros:watch:${embedded.savedAt ?? 'live'}`;
         const load = key => { try { return JSON.parse(localStorage.getItem(key)); } catch { return null; } };
         const storedSettings = load(SETTINGS_KEY);
@@ -235,8 +233,7 @@ The page is rebuilt on every load by replaying all recorded run_js scripts, in o
             model: storedSettings?.model || $('model').defaultValue,
             usage: storedSettings?.usage ?? { input: 0, output: 0, responses: 0, lastTask: null },
         };
-        // Seed the experiment from the existing workspace; all later writes stay in its own slot.
-        const saved = load(CONTENT_KEY) ?? load(ORIGINAL_CONTENT_KEY) ?? embedded;
+        const saved = load(CONTENT_KEY) ?? embedded;
         const state = {
             history: saved.history,
             mutations: saved.mutations,
@@ -430,7 +427,7 @@ The page is rebuilt on every load by replaying all recorded run_js scripts, in o
         }
 
         // --- PERSISTENCE ---
-        // Keep scripts and changed layouts in order. History revisions point into this append-only log.
+        // Keep scripts, tile colors and data in order. History revisions point into this log.
         function saveTask(task, prompt, summary, before) {
             state.history = [...state.history, { role: 'user', content: prompt, task, before }, { role: 'assistant', content: summary, task, revision: state.mutations.length }].slice(-20);
             dataBoundary = state.mutations.length;
@@ -483,9 +480,7 @@ The page is rebuilt on every load by replaying all recorded run_js scripts, in o
                 if (typeof m.code === 'string') new AsyncFunction(m.code);
                 if (m.layout) {
                     const r = m.layout;
-                    if (typeof r.id !== 'string' || !r.id || !['x', 'y', 'w', 'h'].every(key => Number.isFinite(r[key])) || r.w <= 0 || r.h <= 0
-                        || (r.tone !== undefined && (!Number.isInteger(r.tone) || !TILE_COLORS[r.tone]))
-                        || ['minimized', 'maximized'].some(key => r[key] !== undefined && typeof r[key] !== 'boolean')) throw new Error('Invalid window layout.');
+                    if (typeof r.id !== 'string' || !r.id.trim() || !Number.isInteger(r.tone) || !TILE_COLORS[r.tone]) throw new Error('Invalid tile color.');
                 }
                 if (m.data && (typeof m.data.id !== 'string' || !m.data.id.trim() || !Object.hasOwn(m.data, 'value'))) throw new Error('Invalid tile data.');
             }
@@ -640,7 +635,7 @@ The page is rebuilt on every load by replaying all recorded run_js scripts, in o
                 win.face.hidden = spread === 1 || focused;
                 win.face.querySelector('.tile-title').hidden = camera.zoom < .38;
                 for (const child of win.el.children) if (child !== win.face) child.inert = !interactive;
-                const control = win.el.querySelector('.window-controls button'), action = expanded && focus === 0 ? 'focus' : 'minimize';
+                const control = win.el.querySelector('.window-controls button'), action = expanded && focus === 0 ? 'focus' : 'home';
                 if (control.dataset.windowAction !== action) {
                     control.dataset.windowAction = action;
                     control.title = action === 'focus' ? 'Focus app' : 'All apps'; control.setAttribute('aria-label', control.title);
@@ -734,7 +729,7 @@ The page is rebuilt on every load by replaying all recorded run_js scripts, in o
                     if (el.parentElement !== layer) layer.append(el);
                     el.hidden = false; el.tabIndex = -1; el.classList.add('desktop-window'); el.setAttribute('role', 'region');
                     header.querySelector('.window-controls')?.remove();
-                    header.insertAdjacentHTML('beforeend', '<div class="window-controls"><button type="button" data-window-action="minimize" aria-label="All apps" title="All apps"></button></div>');
+                    header.insertAdjacentHTML('beforeend', '<div class="window-controls"><button type="button" data-window-action="home" aria-label="All apps" title="All apps"></button></div>');
                     drawIcon(header.querySelector('.window-controls button'), 'Minimize2');
                     el.append(face); changed = true; added = el.id;
                 }
@@ -758,9 +753,8 @@ The page is rebuilt on every load by replaying all recorded run_js scripts, in o
 
         function rememberWindows(persist = true) {
             for (const [id, win] of windows) {
-                const layout = { id, x: win.x, y: win.y, w: TILE_SIZE, h: TILE_SIZE, tone: win.tone };
                 const previous = state.mutations.findLast(m => m.layout?.id === id)?.layout;
-                if (JSON.stringify(previous) !== JSON.stringify(layout)) state.mutations.push({ layout });
+                if (previous?.tone !== win.tone) state.mutations.push({ layout: { id, tone: win.tone } });
             }
             if (persist) saveContent();
         }
@@ -771,11 +765,6 @@ The page is rebuilt on every load by replaying all recorded run_js scripts, in o
                 win.tone = tone;
                 win.el.style.setProperty('--tile', TILE_COLORS[tone][0]); win.el.style.setProperty('--tint', TILE_COLORS[tone][1]);
             }
-        }
-
-        function windowAction(id, action) {
-            if (action === 'minimize') returnHome();
-            else focusApp(id);
         }
 
         function uninstallWindow(id) {
@@ -826,7 +815,7 @@ The page is rebuilt on every load by replaying all recorded run_js scripts, in o
                 const face = e.target.closest('.tile-face'), back = e.target.closest('[data-window-action]');
                 if (face) focusApp(face.closest('.desktop-window').id);
                 if (back?.dataset.windowAction === 'focus') { focusApp(back.closest('.desktop-window').id); return; }
-                if (back || (desktop.classList.contains('has-focus') && !e.target.closest('.is-focused'))) returnHome();
+                if (back || (desktop.classList.contains('has-focus') && !e.target.closest('.desktop-window'))) returnHome();
             });
             desktop.addEventListener('wheel', e => {
                 if (expanded && atHome) return;
@@ -977,7 +966,7 @@ The page is rebuilt on every load by replaying all recorded run_js scripts, in o
         function submit() {
             if (busy || controller || importing) return;
             if (!settings.apiKey || !settings.model) {
-                windowAction('ouroboros-settings', 'show');
+                focusApp('ouroboros-settings');
                 $('api-key').focus();
                 return log('error', 'Set your API key and model to get started.');
             }
@@ -991,7 +980,7 @@ The page is rebuilt on every load by replaying all recorded run_js scripts, in o
             const fields = { apiKey: 'api-key', apiBase: 'api-base', model: 'model' };
             for (const [key, id] of Object.entries(fields)) $(id).value = settings[key];
             $('model-btn').textContent = settings.model || 'Choose model';
-            $('model-btn').onclick = () => windowAction('ouroboros-settings', 'show');
+            $('model-btn').onclick = () => focusApp('ouroboros-settings');
             $('save-btn').onclick = () => {
                 for (const [key, id] of Object.entries(fields)) {
                     const field = $(id);
@@ -1001,7 +990,7 @@ The page is rebuilt on every load by replaying all recorded run_js scripts, in o
                 try {
                     saveSettings();
                     $('model-btn').textContent = settings.model || 'Choose model';
-                    windowAction('ouroboros-core', 'show');
+                    focusApp('ouroboros-core');
                     els.status.textContent = 'Settings saved';
                 } catch (e) { log('error', `Could not save settings: ${e.message}`); }
             };
