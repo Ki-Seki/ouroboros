@@ -243,12 +243,22 @@ The page is rebuilt on every load by replaying all recorded run_js scripts, in o
         };
         const saved = load(CONTENT_KEY) ?? embedded;
         const state = {
-            history: saved.history,
-            mutations: saved.mutations,
+            history: [...saved.history],
+            mutations: [...saved.mutations],
         };
         const importBackup = saved.importBackup ?? null;
+        let saveTimer = 0, contentDirty = false;
+        const cancelSave = () => { clearTimeout(saveTimer); saveTimer = 0; contentDirty = false; };
         const saveSettings = () => localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings));
-        const saveContent = () => localStorage.setItem(CONTENT_KEY, JSON.stringify({ ...state, importBackup }));
+        const saveContent = () => { localStorage.setItem(CONTENT_KEY, JSON.stringify({ ...state, importBackup })); cancelSave(); };
+        const flushContent = () => {
+            clearTimeout(saveTimer); saveTimer = 0;
+            if (!contentDirty) return;
+            try { saveContent(); }
+            catch (e) { log('error', `Could not save tile data locally: ${e.message}. Export HTML to keep a copy.`); }
+        };
+        addEventListener('pagehide', flushContent);
+        document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') flushContent(); });
 
         let controller = null;   // AbortController of the running task
         let busy = true;         // true until replay finishes
@@ -273,8 +283,8 @@ The page is rebuilt on every load by replaying all recorded run_js scripts, in o
                 if (previous >= dataBoundary) state.mutations[previous] = { data };
                 else state.mutations.push({ data });
                 tileData.set(id, data.value);
-                try { saveContent(); }
-                catch (e) { log('error', `Could not save tile data locally: ${e.message}. Export HTML to keep a copy.`); }
+                contentDirty = true;
+                if (!saveTimer) saveTimer = setTimeout(flushContent, 250);
             },
         });
 
@@ -380,6 +390,7 @@ The page is rebuilt on every load by replaying all recorded run_js scripts, in o
 
         // --- AGENT LOOP ---
         async function runTask(prompt) {
+            flushContent();
             controller = new AbortController();
             setRunning(true);
             const task = Date.now();
@@ -459,7 +470,7 @@ The page is rebuilt on every load by replaying all recorded run_js scripts, in o
 
         function exportHtml() {
             if (busy || controller || importing) return;
-            syncWindows(); rememberWindows(false);
+            syncWindows(); rememberWindows(false); flushContent();
             const json = JSON.stringify({ ...state, savedAt: Date.now() }).replace(/</g, '\\u003c');
             const html = pristine
                 .replace(/<[s]tyle[^>]*>[\s\S]*?<\/[s]tyle>/g, s => /tailwindcss|--tw-/.test(s) ? '' : s)
@@ -498,6 +509,7 @@ The page is rebuilt on every load by replaying all recorded run_js scripts, in o
         function replaceWorkspace(next) {
             // One write keeps the current canvas intact if the import exceeds local storage capacity.
             localStorage.setItem(CONTENT_KEY, JSON.stringify({ ...next, importBackup: state }));
+            cancelSave();
             busy = true;
             location.reload();
         }
@@ -523,9 +535,11 @@ The page is rebuilt on every load by replaying all recorded run_js scripts, in o
         function restoreVersion(revision, historyLength) {
             if (!Number.isInteger(revision) || busy || controller || importing) return;
             if (!confirm('Restore this version? Later tasks and window changes will be removed. Settings and token usage are kept.')) return;
+            flushContent();
             const next = { history: state.history.slice(0, historyLength), mutations: state.mutations.slice(0, revision) };
             try {
                 localStorage.setItem(CONTENT_KEY, JSON.stringify({ ...next, importBackup }));
+                cancelSave();
                 Object.assign(state, next);
                 busy = true; location.reload();
             } catch (e) { log('error', `Could not restore version: ${e.message}`); }
@@ -542,6 +556,7 @@ The page is rebuilt on every load by replaying all recorded run_js scripts, in o
                 : 'Reset the page to its pristine state? Mutations and history are cleared; settings are kept.';
             if (!confirm(message + (importBackup ? ' The import backup will also be cleared.' : ''))) return;
             localStorage.setItem(CONTENT_KEY, JSON.stringify(embedded));
+            cancelSave();
             busy = true;
             location.reload();
         }
@@ -557,14 +572,17 @@ The page is rebuilt on every load by replaying all recorded run_js scripts, in o
         const clamp = (n, min, max) => Math.min(max, Math.max(min, n));
         const mix = (a, b, t) => a * (1 - t) + b * t;
         const smooth = t => t * t * (3 - 2 * t);
+        const focusProgress = () => windows.has(camera.focus) ? smooth(clamp((camera.zoom - FOCUS_START) / (FOCUS_END - FOCUS_START), 0, 1)) : 0;
         let windowSerial = 0, nextTone = 0, animation = 0, expanded = false, atHome = false;
+        let layoutCache = null, renderFrame = 0;
+        const queueRender = () => { if (!renderFrame) renderFrame = requestAnimationFrame(renderMap); };
 
         function drawIcon(target, name) {
             target.replaceChildren(lucide.createElement(lucide.icons[name], { class: 'ui-icon', 'stroke-width': 1.8, 'aria-hidden': 'true', focusable: 'false', preserveAspectRatio: 'xMidYMid meet' }));
         }
 
-        function appSize(el, padding = 24) {
-            const maxW = Math.max(1, desktop.clientWidth - padding), maxH = Math.max(1, desktop.clientHeight - padding);
+        function appSize(el, width, height, padding = 24) {
+            const maxW = Math.max(1, width - padding), maxH = Math.max(1, height - padding);
             const preferred = (value, max, fallback) => value === 'fill' ? max : Number.isFinite(+value) && +value > 0 ? +value : fallback;
             let w = preferred(el.dataset.width, maxW, 480), h = preferred(el.dataset.height, maxH, 520);
             const [a, b = 1] = (el.dataset.aspectRatio || '').split('/').map(Number), ratio = a / b;
@@ -588,8 +606,8 @@ The page is rebuilt on every load by replaying all recorded run_js scripts, in o
             [...windows.values()].forEach((win, i) => { Object.assign(win, slots[i]); win.el.style.order = i; });
         }
 
-        function expandedLayout() {
-            const rects = new Map(), width = desktop.clientWidth;
+        function expandedLayout(width, height) {
+            const rects = new Map();
             let row = [], rowWidth = 0, rowHeight = 0, y = 24;
             const finishRow = () => {
                 let x = (width - rowWidth) / 2;
@@ -597,33 +615,38 @@ The page is rebuilt on every load by replaying all recorded run_js scripts, in o
                 y += rowHeight + 20; row = []; rowWidth = 0; rowHeight = 0;
             };
             for (const win of windows.values()) {
-                const size = appSize(win.el, 48);
+                const size = appSize(win.el, width, height, 48);
                 if (row.length && rowWidth + 20 + size.w > width - 48) finishRow();
                 rowWidth += (row.length ? 20 : 0) + size.w;
                 rowHeight = Math.max(rowHeight, size.h); row.push([win, size]);
             }
             if (row.length) finishRow();
-            return { rects, height: Math.max(desktop.clientHeight, y + 4) };
+            return { rects, width, viewportHeight: height, height: Math.max(height, y + 4) };
         }
 
         function renderMap() {
+            cancelAnimationFrame(renderFrame); renderFrame = 0;
             document.documentElement.classList.toggle('no-animations', settings.disableAnimations);
             const spread = camera.expansion, switching = spread !== Number(expanded);
             const detail = mix(smooth(clamp((camera.zoom - .82) / .32, 0, 1)), 1, spread);
-            const focus = windows.has(camera.focus) ? smooth(clamp((camera.zoom - FOCUS_START) / (FOCUS_END - FOCUS_START), 0, 1)) : 0;
+            const focus = focusProgress();
             const width = desktop.clientWidth, height = desktop.clientHeight;
+            if (!layoutCache || layoutCache.width !== width || layoutCache.viewportHeight !== height) {
+                layoutCache = expandedLayout(width, height);
+                for (const win of windows.values()) win.size = appSize(win.el, width, height);
+            }
             desktop.classList.toggle('has-focus', focus > .95);
             desktop.classList.toggle('has-overlay', spread > 0 && focus > 0);
             desktop.classList.toggle('is-expanded', spread > 0 || expanded);
             desktop.classList.toggle('is-switching', switching);
             if (!spread) { desktop.scrollTop = 0; desktop.scrollLeft = 0; }
-            const board = spread || expanded ? expandedLayout() : null;
+            const board = spread || expanded ? layoutCache : null;
             layer.style.height = `${board?.height ?? height}px`;
             const scrollX = desktop.scrollLeft, scrollY = desktop.scrollTop;
             for (const win of windows.values()) {
                 const selected = win.el.id === camera.focus, amount = selected ? focus : 0;
                 const slot = board?.rects.get(win) ?? { x: 0, y: 0, w: TILE_SIZE, h: TILE_SIZE };
-                const size = appSize(win.el);
+                const size = win.size;
                 const scale = mix(mix(camera.zoom, 1, spread), 1, amount);
                 const w = mix(mix(TILE_SIZE * camera.zoom, slot.w, spread), size.w, amount);
                 const h = mix(mix(TILE_SIZE * camera.zoom, slot.h, spread), size.h, amount);
@@ -660,6 +683,7 @@ The page is rebuilt on every load by replaying all recorded run_js scripts, in o
 
         function moveCamera(next, animate = true, done = () => {}) {
             cancelAnimationFrame(animation);
+            cancelAnimationFrame(renderFrame); renderFrame = 0;
             if (!animate || settings.disableAnimations || matchMedia('(prefers-reduced-motion: reduce)').matches) { Object.assign(camera, next); renderMap(); done(); return; }
             const from = { ...camera }, start = performance.now();
             const frame = now => {
@@ -693,7 +717,7 @@ The page is rebuilt on every load by replaying all recorded run_js scripts, in o
             moveCamera({ x: win.x, y: win.y, zoom: FOCUS_END, expansion: Number(expanded) }, animate);
         }
 
-        function zoomAt(zoom, x = desktop.clientWidth / 2, y = desktop.clientHeight / 2) {
+        function zoomAt(zoom, x = desktop.clientWidth / 2, y = desktop.clientHeight / 2, defer = false) {
             if ((expanded && atHome) || camera.expansion !== Number(expanded)) return;
             atHome = false;
             cancelAnimationFrame(animation);
@@ -704,7 +728,7 @@ The page is rebuilt on every load by replaying all recorded run_js scripts, in o
             }
             camera.x = world.x - dx / next; camera.y = world.y - dy / next; camera.zoom = next;
             if (expanded && next <= FOCUS_START) atHome = true;
-            renderMap();
+            if (defer) queueRender(); else renderMap();
         }
 
         function returnHome(animate = true) {
@@ -720,7 +744,7 @@ The page is rebuilt on every load by replaying all recorded run_js scripts, in o
         }
 
         function syncWindows() {
-            let changed = false, added = null;
+            let changed = false, renamed = false, added = null;
             for (const [id, win] of windows) {
                 if ((!win.el.isConnected || win.el.id !== id) && !$(id)?.matches('.draggable.resizable')) { windows.delete(id); changed = true; }
             }
@@ -744,20 +768,23 @@ The page is rebuilt on every load by replaying all recorded run_js scripts, in o
                 }
                 const title = el.dataset.windowTitle || header.querySelector('h1,h2,h3')?.textContent.trim() || el.id;
                 if (win.title !== title) {
+                    renamed = true;
                     win.title = title; el.setAttribute('aria-label', title); win.face.setAttribute('aria-label', `Open ${title}`);
                     win.face.querySelector('.tile-title').textContent = title;
                 }
                 const icon = Object.hasOwn(lucide.icons, el.dataset.windowIcon) ? el.dataset.windowIcon : 'AppWindow';
                 if (win.icon !== icon) { win.icon = icon; drawIcon(win.face.querySelector('.tile-icon'), icon); }
+                const sizeKey = [el.dataset.width, el.dataset.height, el.dataset.aspectRatio].join('|');
+                if (win.sizeKey !== sizeKey) { win.sizeKey = sizeKey; layoutCache = null; }
                 Object.assign(el.style, { position: 'absolute', left: '0px', top: '0px', margin: '0px' });
                 el.style.setProperty('--tile', TILE_COLORS[win.tone][0]); el.style.setProperty('--tint', TILE_COLORS[win.tone][1]);
                 win.face.disabled = busy || importing;
             }
-            if (changed) layoutApps();
+            if (changed) { layoutCache = null; layoutApps(); }
             if (camera.focus && !windows.has(camera.focus)) { camera.focus = null; returnHome(false); }
             else if (added && !busy && !expanded) focusApp(added);
             else renderMap();
-            renderTiles();
+            if (changed || renamed) renderTiles();
         }
 
         function rememberWindows(persist = true) {
@@ -797,8 +824,8 @@ The page is rebuilt on every load by replaying all recorded run_js scripts, in o
             syncWindows();
             let drag = null, touch = null, suppressClick = false;
             const point = e => { const box = desktop.getBoundingClientRect(); return { x: e.clientX - box.left, y: e.clientY - box.top }; };
-            const pan = (dx, dy) => { cancelAnimationFrame(animation); atHome = false; camera.x -= dx / camera.zoom; camera.y -= dy / camera.zoom; renderMap(); };
-            const canExplore = () => !expanded && camera.expansion === 0 && !desktop.classList.contains('has-focus');
+            const pan = (dx, dy) => { cancelAnimationFrame(animation); atHome = false; camera.x -= dx / camera.zoom; camera.y -= dy / camera.zoom; queueRender(); };
+            const canExplore = () => !expanded && camera.expansion === 0 && focusProgress() <= .95;
             desktop.addEventListener('pointerdown', e => {
                 if (e.pointerType === 'touch' || e.button !== 0 || !canExplore()) return;
                 drag = { x: e.clientX, y: e.clientY, distance: 0, face: e.target.closest('.tile-face') };
@@ -831,7 +858,7 @@ The page is rebuilt on every load by replaying all recorded run_js scripts, in o
                 if (!e.ctrlKey && desktop.classList.contains('has-focus') && e.target.closest('.is-focused')) return;
                 e.preventDefault();
                 const p = point(e), delta = e.deltaY * (e.deltaMode === 1 ? 16 : e.deltaMode === 2 ? desktop.clientHeight : 1);
-                zoomAt(camera.zoom * Math.exp(-clamp(delta, -100, 100) * .003), p.x, p.y);
+                zoomAt(camera.zoom * Math.exp(-clamp(delta, -100, 100) * .003), p.x, p.y, true);
             }, { passive: false });
             const touchPoints = e => [...e.touches].map(point);
             const midpoint = points => points.length > 1 ? { x: (points[0].x + points[1].x) / 2, y: (points[0].y + points[1].y) / 2 } : points[0];
@@ -851,7 +878,7 @@ The page is rebuilt on every load by replaying all recorded run_js scripts, in o
                 if (e.cancelable) e.preventDefault();
                 const points = touchPoints(e), p = midpoint(points), d = distance(points);
                 const dx = p.x - touch.p.x, dy = p.y - touch.p.y;
-                if (d && touch.distance) zoomAt(camera.zoom * d / touch.distance, touch.p.x, touch.p.y);
+                if (d && touch.distance) zoomAt(camera.zoom * d / touch.distance, touch.p.x, touch.p.y, true);
                 if (canExplore()) pan(dx, dy);
                 touch.traveled += Math.hypot(dx, dy);
                 touch.moved ||= touch.traveled > 4 || d > 0;
@@ -1045,7 +1072,16 @@ The page is rebuilt on every load by replaying all recorded run_js scripts, in o
 
             let queued = false;
             new MutationObserver(mutations => {
-                if (mutations.every(m => (m.target.nodeType === 1 ? m.target : m.target.parentElement)?.closest(HARNESS))) return;
+                const relevant = mutations.some(m => {
+                    const target = m.target.nodeType === 1 ? m.target : m.target.parentElement;
+                    if (!target) return false;
+                    if (m.type === 'attributes') return target.matches('.draggable.resizable');
+                    if (target.closest(HARNESS)) return false;
+                    if (target.closest('.window-header') && !target.closest('.window-controls')) return true;
+                    return m.type === 'childList' && (target.matches('.draggable.resizable') || [...m.addedNodes, ...m.removedNodes].some(n =>
+                        n.nodeType === 1 && (n.matches('.draggable.resizable') || n.querySelector('.draggable.resizable'))));
+                });
+                if (!relevant) return;
                 if (!queued) { queued = true; requestAnimationFrame(() => { queued = false; syncWindows(); }); }
             }).observe(document.body, { childList: true, subtree: true, attributes: true, attributeFilter: ['id', 'data-window-title', 'data-window-icon', 'data-width', 'data-height', 'data-aspect-ratio'], characterData: true });
         }
