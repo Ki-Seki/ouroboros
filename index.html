@@ -894,7 +894,7 @@ The page is rebuilt on every load by replaying all recorded run_js scripts, in o
                     if (e.key === '0') returnHome();
                 }
             });
-            addEventListener('resize', () => expanded || camera.zoom >= FOCUS_END ? renderMap() : overview(false));
+            addEventListener('resize', () => !expanded && atHome ? overview(false) : renderMap());
         }
 
         // --- UI ---
