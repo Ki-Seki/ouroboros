@@ -9,6 +9,7 @@
     <script src="https://cdn.jsdelivr.net/npm/lucide@1.47.0/dist/umd/lucide.min.js"></script>
     <style>
         html, body { touch-action: pan-x pan-y; overscroll-behavior: none; }
+        .no-animations *, .no-animations *::before, .no-animations *::after { animation: none !important; transition: none !important; scroll-behavior: auto !important; }
         body { margin: 0; background: #eff1eb; color: #293b34; font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, sans-serif; }
         #desktop { position: fixed; inset: 64px 0 36px; overflow: hidden; isolation: isolate; overscroll-behavior: contain; scrollbar-gutter: stable; cursor: grab; }
         #desktop, #desktop * { touch-action: none; }
@@ -134,6 +135,12 @@
                 <label class="ui-label settings-field">Model<input type="text" id="model" value="gpt-5.6-sol" class="ui-field" spellcheck="false"></label>
                 <div class="flex justify-end"><button id="save-btn" type="button" class="ui-button">Save settings</button></div>
             </section>
+            <section class="settings-section" aria-labelledby="appearance-title">
+                <h3 id="appearance-title">Appearance</h3>
+                <label class="flex items-center justify-between gap-4 min-h-11 cursor-pointer" for="disable-animations">
+                    <span>Disable animations</span><input id="disable-animations" type="checkbox" class="w-4 h-4 shrink-0 accent-[var(--tile)]">
+                </label>
+            </section>
             <section class="settings-section" aria-labelledby="usage-title">
                 <h3 id="usage-title">Token usage</h3>
                 <table class="usage-table" aria-labelledby="usage-title" aria-describedby="usage-note">
@@ -231,6 +238,7 @@ The page is rebuilt on every load by replaying all recorded run_js scripts, in o
             apiKey: storedSettings?.apiKey ?? '',
             apiBase: storedSettings?.apiBase || $('api-base').defaultValue,
             model: storedSettings?.model || $('model').defaultValue,
+            disableAnimations: storedSettings?.disableAnimations ?? false,
             usage: storedSettings?.usage ?? { input: 0, output: 0, responses: 0, lastTask: null },
         };
         const saved = load(CONTENT_KEY) ?? embedded;
@@ -599,6 +607,7 @@ The page is rebuilt on every load by replaying all recorded run_js scripts, in o
         }
 
         function renderMap() {
+            document.documentElement.classList.toggle('no-animations', settings.disableAnimations);
             const spread = camera.expansion, switching = spread !== Number(expanded);
             const detail = mix(smooth(clamp((camera.zoom - .82) / .32, 0, 1)), 1, spread);
             const focus = windows.has(camera.focus) ? smooth(clamp((camera.zoom - FOCUS_START) / (FOCUS_END - FOCUS_START), 0, 1)) : 0;
@@ -624,7 +633,7 @@ The page is rebuilt on every load by replaying all recorded run_js scripts, in o
                 const y = mix(mix(mapY, slot.y, spread), (height - size.h) / 2 + scrollY, amount);
                 const focused = selected && focus > .95 && !switching;
                 const interactive = !switching && (focused || (expanded && focus === 0));
-                Object.assign(win.el.style, { width: `${w / scale}px`, height: `${h / scale}px`, transform: `translate(${x}px, ${y}px) scale(${scale})`, zIndex: selected ? '3' : '1', filter: selected ? 'none' : `blur(${focus * 7 / scale}px)`, opacity: selected ? '1' : String(1 - focus * .75) });
+                Object.assign(win.el.style, { width: `${w / scale}px`, height: `${h / scale}px`, transform: `translate(${x}px, ${y}px) scale(${scale})`, zIndex: selected ? '3' : '1', filter: selected || settings.disableAnimations ? 'none' : `blur(${focus * 7 / scale}px)`, opacity: selected ? '1' : String(1 - focus * .75) });
                 win.el.style.setProperty('--detail', detail);
                 win.el.style.setProperty('--radius', `${mix(TILE_SIZE / 2, 22, detail)}px`);
                 win.el.style.setProperty('--label-size', `${Math.max(18, 12 / camera.zoom)}px`);
@@ -651,10 +660,10 @@ The page is rebuilt on every load by replaying all recorded run_js scripts, in o
 
         function moveCamera(next, animate = true, done = () => {}) {
             cancelAnimationFrame(animation);
-            if (!animate || matchMedia('(prefers-reduced-motion: reduce)').matches) { Object.assign(camera, next); renderMap(); done(); return; }
+            if (!animate || settings.disableAnimations || matchMedia('(prefers-reduced-motion: reduce)').matches) { Object.assign(camera, next); renderMap(); done(); return; }
             const from = { ...camera }, start = performance.now();
             const frame = now => {
-                const t = clamp((now - start) / 480, 0, 1), ease = smooth(t);
+                const t = settings.disableAnimations ? 1 : clamp((now - start) / 480, 0, 1), ease = smooth(t);
                 for (const key of ['x', 'y', 'zoom', 'expansion']) camera[key] = mix(from[key], next[key] ?? from[key], ease);
                 renderMap();
                 if (t < 1) animation = requestAnimationFrame(frame);
@@ -979,6 +988,14 @@ The page is rebuilt on every load by replaying all recorded run_js scripts, in o
         function bindSettings() {
             const fields = { apiKey: 'api-key', apiBase: 'api-base', model: 'model' };
             for (const [key, id] of Object.entries(fields)) $(id).value = settings[key];
+            const motion = $('disable-animations');
+            motion.checked = settings.disableAnimations;
+            motion.onchange = () => {
+                settings.disableAnimations = motion.checked;
+                renderMap();
+                try { saveSettings(); }
+                catch (e) { log('error', `Could not save settings: ${e.message}`); }
+            };
             $('model-btn').textContent = settings.model || 'Choose model';
             $('model-btn').onclick = () => focusApp('ouroboros-settings');
             $('save-btn').onclick = () => {
