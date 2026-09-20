@@ -4,8 +4,9 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Ouroboros</title>
-    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E🐍%3C/text%3E%3C/svg%3E">
+    <link rel="icon" href="data:,">
     <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/lucide@1.47.0/dist/umd/lucide.min.js"></script>
     <style>
         body { margin: 0; background: #eff1eb; color: #293b34; font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, sans-serif; }
         #desktop { position: fixed; inset: 64px 0 36px; overflow: hidden; isolation: isolate; overscroll-behavior: contain; cursor: grab; }
@@ -18,21 +19,22 @@
         #window-layer > .desktop-window > .window-header { display: flex; align-items: center; gap: 8px; min-height: 52px; padding: 8px 12px 8px 20px; flex-shrink: 0; color: var(--tile); background: var(--tint); border-bottom: 1px solid var(--line); cursor: inherit; user-select: none; }
         #window-layer .window-header > :is(h1,h2,h3) { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 18px; font-weight: 500; letter-spacing: -.02em; }
         #window-layer .window-controls { display: flex; flex: none; margin-left: auto; }
-        #window-layer .window-controls button { width: 36px; height: 36px; border-radius: 50%; color: var(--tile); font: 22px/1 system-ui; }
+        #window-layer .window-controls button { display: grid; place-items: center; width: 36px; height: 36px; border-radius: 50%; color: var(--tile); }
         #window-layer .window-controls button:hover { background: #00000008; }
         #window-layer .tile-face { position: absolute; inset: 0; z-index: 2; display: grid; align-content: center; justify-items: center; gap: 12px; width: 100%; border: 0; border-radius: inherit; color: #fffefb; background: linear-gradient(145deg, color-mix(in srgb, var(--tile), white 14%), var(--tile)); opacity: calc(1 - var(--detail, 0)); cursor: pointer; }
         #window-layer .tile-face[hidden] { display: none; }
         #window-layer .tile-face:focus-visible { outline: 5px solid white; outline-offset: -10px; }
-        #window-layer .tile-icon { font-size: var(--icon-size, 68px); font-weight: 300; line-height: 1.15; }
+        .ui-icon { display: block; width: 20px; height: 20px; flex: none; }
+        #window-layer .tile-icon .ui-icon { width: var(--icon-size, 68px); height: var(--icon-size, 68px); stroke-width: 1.6; }
         #window-layer .tile-title { max-width: 78%; font-size: var(--label-size, 18px); font-weight: 500; line-height: 1.3; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
         #map-toolbar { position: fixed; inset: 0 0 auto; z-index: 10; display: flex; align-items: center; justify-content: space-between; height: 64px; padding: 0 24px; gap: 12px; }
         #map-toolbar button, #map-zoom button { min-width: 44px; min-height: 44px; border: 0; border-radius: 22px; color: #375d58; background: transparent; }
         #map-toolbar button:hover, #map-zoom button:hover { background: #375d5810; }
         #map-toolbar button:focus-visible, #map-zoom button:focus-visible { outline: 2px solid #375d58; outline-offset: 2px; }
         #map-home { display: flex; align-items: center; gap: 10px; padding: 0 12px; font-size: 16px; font-weight: 500; letter-spacing: -.03em; }
-        #map-home > :first-child { font-size: 28px; font-weight: 300; }
+        #map-home .ui-icon { width: 28px; height: 28px; }
         #map-zoom { position: fixed; bottom: 14px; right: 20px; z-index: 10; display: flex; align-items: center; border: 1px solid #dce2dc; border-radius: 24px; background: #f8f9f5ee; }
-        #map-zoom button { font-size: 22px; }
+        #map-zoom button { display: grid; place-items: center; }
         #map-scale { min-width: 42px; text-align: center; font-size: 11px; font-variant-numeric: tabular-nums; color: #68766f; }
         #map-hint { position: fixed; bottom: 25px; left: 28px; color: #68766f; font-size: 12px; pointer-events: none; }
         @media (max-width: 599px) {
@@ -96,7 +98,7 @@
 
     <main id="desktop" aria-label="Application map" tabindex="0"><div id="window-layer">
     <!-- GENESIS WINDOW: CORE -->
-    <div id="ouroboros-core" class="draggable resizable core-panel select-none" data-window-title="Ouroboros">
+    <div id="ouroboros-core" class="draggable resizable core-panel select-none" data-window-title="Ouroboros" data-window-icon="Infinity" data-width="520" data-height="640">
         <!-- Header -->
         <div class="window-header cursor-move px-4 py-3 flex shrink-0 justify-between items-center gap-2">
             <h1>Ouroboros</h1>
@@ -121,7 +123,7 @@
         </div>
     </div>
 
-    <section id="ouroboros-settings" class="draggable resizable core-panel" data-window-title="Settings" hidden>
+    <section id="ouroboros-settings" class="draggable resizable core-panel" data-window-title="Settings" data-window-icon="Settings" data-width="480" data-height="640" hidden>
         <div class="window-header"><h2>Settings</h2></div>
         <div id="settings-panel" class="core-settings ui-body">
             <section class="settings-section" aria-labelledby="connection-title">
@@ -167,11 +169,11 @@
     </section>
     </div></main>
     <header id="map-toolbar">
-        <button id="map-home" type="button" aria-label="All apps" title="All apps · Esc"><span aria-hidden="true">∞</span><span id="map-home-title">Ouroboros</span></button>
+        <button id="map-home" type="button" aria-label="All apps" title="All apps · Esc"><span id="map-home-icon" aria-hidden="true"></span><span id="map-home-title">Ouroboros</span></button>
     </header>
     <p id="map-hint">Drag to explore · Scroll to zoom</p>
     <div id="map-zoom" role="group" aria-label="Map zoom">
-        <button id="map-zoom-out" type="button" aria-label="Zoom out">−</button><output id="map-scale" aria-label="Zoom level">70%</output><button id="map-zoom-in" type="button" aria-label="Zoom in">+</button>
+        <button id="map-zoom-out" type="button" aria-label="Zoom out"></button><output id="map-scale" aria-label="Zoom level">70%</output><button id="map-zoom-in" type="button" aria-label="Zoom in"></button>
     </div>
 
     <!-- EMBEDDED SYSTEM PROMPT (editable by users) -->
@@ -198,7 +200,9 @@ The page is rebuilt on every load by replaying all recorded run_js scripts, in o
 
 ## Rules
 - Never modify or remove #ouroboros-core, #ouroboros-settings, #map-toolbar, #map-zoom, #map-hint, the desktop containers, or the ouroboros-* script blocks. You may append windows to #window-layer.
-- Build each feature as a window with a stable unique id and classes `draggable resizable`. Give it a direct `.window-header` child containing an h2 title, and a `.ui-body` content area. Append it to #window-layer. Optional data-window-icon supplies a short symbol for the tile. Previews are 320px square; the focused app expands to fit the viewport. Apps form a compact honeycomb map on both computers and phones. Zooming reveals their content and focuses one app; zooming out returns to tiles. The host handles all placement, zoom, focus and navigation; keep content responsive and do not build your own window controls.
+- Build each feature as a window with a stable unique id and classes `draggable resizable`. Give it a direct `.window-header` child containing an h2 title, and a `.ui-body` content area. Append it to #window-layer. Set data-window-icon to a Lucide icon name in PascalCase, such as CalendarDays, StickyNote, Timer, Palette, Thermometer or Tally5. Choose from the full library; check `lucide.icons[name]` before using it. For icons inside the app, use `lucide.createElement(lucide.icons.IconName)`. Never use emoji, letters or pasted SVG paths as icons.
+- Previews are 320px square. Choose focused dimensions appropriate to the content with data-width and data-height in pixels (default 480 × 520). For example, a counter can be 360 × 320, notes 420 × 640, and a chart 900 × 560. Use "fill" for a dimension only when the app benefits from filling that axis. Optional data-aspect-ratio (e.g. "1" or "16/9") fits a fixed shape inside the preferred dimensions. The host centers the app and keeps it within the viewport; allow inner scrolling where needed.
+- Apps form a compact honeycomb map on both computers and phones. Zooming reveals their content and focuses one app; zooming out returns to tiles. The host handles all placement, sizing, zoom, focus and navigation; keep content responsive and do not build your own window controls.
 - Use the shared controls: `ui-label` for labels, `ui-field` for inputs/selects/textareas, `ui-button` for primary actions, `ui-button is-secondary` for secondary actions. The map uses circular colored tiles that open into softly rounded applications with warm-white content, dark text and clear typography. Each new window automatically receives a stable color from a coordinated muted palette of teal, blue, plum, clay, olive and rose; keep that color and use `var(--accent)` for emphasis, `var(--tint)` for subtle highlights and `var(--muted)` for secondary text. The desktop supplies 14px body text, 16px content padding, borders and focus styles. Use Tailwind for layout with 8px or 16px gaps. Keep content backgrounds transparent, without extra card shells, heavy shadows or unrelated color palettes. Larger light-weight numbers work well for key metrics; custom visuals should follow the user's request.
 - Keep code compact. No large inline images or data URIs.
 - Verify your work with read_dom or eval_js before finishing. When done, reply with a one-line summary and no tool calls. Ask the user only when the request is truly ambiguous.
@@ -555,6 +559,24 @@ The page is rebuilt on every load by replaying all recorded run_js scripts, in o
         const smooth = t => t * t * (3 - 2 * t);
         let windowSerial = 0, nextTone = 0, animation = 0;
 
+        function drawIcon(target, name) {
+            target.replaceChildren(lucide.createElement(lucide.icons[name], { class: 'ui-icon', 'stroke-width': 1.8, 'aria-hidden': 'true', focusable: 'false' }));
+        }
+
+        function appSize(el) {
+            const maxW = Math.max(1, desktop.clientWidth - 24), maxH = Math.max(1, desktop.clientHeight - 24);
+            const preferred = (value, max, fallback) => value === 'fill' ? max : Number.isFinite(+value) && +value > 0 ? +value : fallback;
+            let w = preferred(el.dataset.width, maxW, 480), h = preferred(el.dataset.height, maxH, 520);
+            const [a, b = 1] = (el.dataset.aspectRatio || '').split('/').map(Number), ratio = a / b;
+            if (Number.isFinite(ratio) && ratio > 0) {
+                if (w / h > ratio) w = h * ratio;
+                else h = w / ratio;
+                const fit = Math.min(1, maxW / w, maxH / h);
+                return { w: w * fit, h: h * fit };
+            }
+            return { w: Math.min(w, maxW), h: Math.min(h, maxH) };
+        }
+
         function layoutApps() {
             const slots = [{ x: 0, y: 0 }];
             for (let ring = 1; slots.length < windows.size; ring++) {
@@ -574,9 +596,10 @@ The page is rebuilt on every load by replaying all recorded run_js scripts, in o
             for (const win of windows.values()) {
                 const selected = win.el.id === camera.focus, amount = selected ? focus : 0;
                 const scale = mix(camera.zoom, 1, amount);
-                const w = mix(TILE_SIZE * camera.zoom, width - 24, amount), h = mix(TILE_SIZE * camera.zoom, height - 24, amount);
-                const x = mix(width / 2 + (win.x - camera.x - TILE_SIZE / 2) * camera.zoom, 12, amount);
-                const y = mix(height / 2 + (win.y - camera.y - TILE_SIZE / 2) * camera.zoom, 12, amount);
+                const size = appSize(win.el);
+                const w = mix(TILE_SIZE * camera.zoom, size.w, amount), h = mix(TILE_SIZE * camera.zoom, size.h, amount);
+                const x = mix(width / 2 + (win.x - camera.x - TILE_SIZE / 2) * camera.zoom, (width - size.w) / 2, amount);
+                const y = mix(height / 2 + (win.y - camera.y - TILE_SIZE / 2) * camera.zoom, (height - size.h) / 2, amount);
                 const interactive = selected && focus > .95;
                 Object.assign(win.el.style, { width: `${w / scale}px`, height: `${h / scale}px`, transform: `translate(${x}px, ${y}px) scale(${scale})`, zIndex: selected ? '3' : '1', filter: selected ? 'none' : `blur(${focus * 7 / scale}px)`, opacity: selected ? '1' : String(1 - focus * .75) });
                 win.el.style.setProperty('--detail', detail);
@@ -659,7 +682,8 @@ The page is rebuilt on every load by replaying all recorded run_js scripts, in o
                     if (el.parentElement !== layer) layer.append(el);
                     el.hidden = false; el.tabIndex = -1; el.classList.add('desktop-window'); el.setAttribute('role', 'region');
                     header.querySelector('.window-controls')?.remove();
-                    header.insertAdjacentHTML('beforeend', '<div class="window-controls"><button type="button" data-window-action="minimize" aria-label="All apps" title="All apps">↙</button></div>');
+                    header.insertAdjacentHTML('beforeend', '<div class="window-controls"><button type="button" data-window-action="minimize" aria-label="All apps" title="All apps"></button></div>');
+                    drawIcon(header.querySelector('.window-controls button'), 'Minimize2');
                     el.append(face); changed = true; added = el.id;
                 }
                 const title = el.dataset.windowTitle || header.querySelector('h1,h2,h3')?.textContent.trim() || el.id;
@@ -667,8 +691,8 @@ The page is rebuilt on every load by replaying all recorded run_js scripts, in o
                     win.title = title; el.setAttribute('aria-label', title); win.face.setAttribute('aria-label', `Open ${title}`);
                     win.face.querySelector('.tile-title').textContent = title;
                 }
-                const icon = el.dataset.windowIcon || (el.id === 'ouroboros-core' ? '∞' : el.id === 'ouroboros-settings' ? '⚙' : Array.from(title)[0].toUpperCase());
-                if (win.icon !== icon) { win.icon = icon; win.face.querySelector('.tile-icon').textContent = icon; }
+                const icon = Object.hasOwn(lucide.icons, el.dataset.windowIcon) ? el.dataset.windowIcon : 'AppWindow';
+                if (win.icon !== icon) { win.icon = icon; drawIcon(win.face.querySelector('.tile-icon'), icon); }
                 Object.assign(el.style, { position: 'absolute', left: '0px', top: '0px', margin: '0px' });
                 el.style.setProperty('--tile', TILE_COLORS[win.tone][0]); el.style.setProperty('--tint', TILE_COLORS[win.tone][1]);
                 win.face.disabled = busy || importing;
@@ -718,6 +742,10 @@ The page is rebuilt on every load by replaying all recorded run_js scripts, in o
         }
 
         function setupWindows() {
+            drawIcon($('map-home-icon'), 'Infinity');
+            drawIcon($('map-zoom-in'), 'Plus');
+            drawIcon($('map-zoom-out'), 'Minus');
+            document.querySelector('link[rel="icon"]').href = 'data:image/svg+xml,' + encodeURIComponent(lucide.createElement(lucide.icons.Infinity, { stroke: '#375d58' }).outerHTML);
             syncWindows();
             let drag = null, touch = null, suppressClick = false;
             const point = e => { const box = desktop.getBoundingClientRect(); return { x: e.clientX - box.left, y: e.clientY - box.top }; };
@@ -955,7 +983,7 @@ The page is rebuilt on every load by replaying all recorded run_js scripts, in o
             new MutationObserver(mutations => {
                 if (mutations.every(m => (m.target.nodeType === 1 ? m.target : m.target.parentElement)?.closest(HARNESS))) return;
                 if (!queued) { queued = true; requestAnimationFrame(() => { queued = false; syncWindows(); }); }
-            }).observe(document.body, { childList: true, subtree: true, attributes: true, attributeFilter: ['id', 'data-window-title', 'data-window-icon'], characterData: true });
+            }).observe(document.body, { childList: true, subtree: true, attributes: true, attributeFilter: ['id', 'data-window-title', 'data-window-icon', 'data-width', 'data-height', 'data-aspect-ratio'], characterData: true });
         }
 
         init();
