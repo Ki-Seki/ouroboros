@@ -10,9 +10,10 @@
     <style>
         html, body { touch-action: pan-x pan-y; overscroll-behavior: none; }
         .no-animations *, .no-animations *::before, .no-animations *::after { animation: none !important; transition: none !important; scroll-behavior: auto !important; }
-        body { margin: 0; background: radial-gradient(ellipse at 50% 0%, #fff 0%, #f1f3f6 75%); color: #202632; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; -webkit-font-smoothing: antialiased; }
-        body.restoring > :not(#map-toolbar) { visibility: hidden !important; opacity: 0 !important; }
-        #desktop { position: fixed; inset: 64px 0 36px; overflow: hidden; isolation: isolate; overscroll-behavior: contain; scrollbar-gutter: stable; cursor: grab; }
+        body { margin: 0; background: #f2f4f8; color: #1d1d1f; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; -webkit-font-smoothing: antialiased; }
+        body.restoring > :not(#map-toolbar):not(#desktop-wallpaper) { visibility: hidden !important; opacity: 0 !important; }
+        #desktop-wallpaper { position: fixed; inset: 0; width: 100%; height: 100%; pointer-events: none; }
+        #desktop { position: fixed; inset: 0; overflow: hidden; isolation: isolate; overscroll-behavior: contain; scrollbar-gutter: stable; cursor: grab; }
         #desktop, #desktop * { touch-action: none; }
         #desktop.has-focus, #desktop.has-focus *, #desktop.is-expanded, #desktop.is-expanded * { touch-action: pan-x pan-y; }
         #desktop.is-panning { cursor: grabbing; }
@@ -21,7 +22,7 @@
         #desktop.is-expanded { overflow: auto; cursor: default; }
         #desktop.is-switching { overflow: hidden; pointer-events: none; }
         #desktop.is-expanded.has-overlay { overflow: hidden; }
-        #window-layer > .desktop-window { --tile: #375d58; --tint: #eef4f2; --ink: #202632; --muted: #697382; --line: #e7eaf0; --surface: #f6f7f9; --accent: var(--tile); position: absolute; left: 0; top: 0; display: flex; flex-direction: column; box-sizing: border-box; overflow: hidden; transform-origin: 0 0; color: var(--ink); background: #fff; font-size: 14px; line-height: 1.5; border: 1px solid #ffffffb3; border-radius: var(--radius, 50%) !important; box-shadow: 0 2px 6px #18233305, 0 12px 36px #1823330b, 0 0 0 1px #18233308; }
+        #window-layer > .desktop-window { --tile: #24695b; --tint: #edf5f1; --ink: #1d1d1f; --muted: #6e6e73; --line: #e5e5ea; --surface: #f5f5f7; --accent: var(--tile); position: absolute; left: 0; top: 0; display: flex; flex-direction: column; box-sizing: border-box; overflow: hidden; transform-origin: 0 0; color: var(--ink); background: rgb(255 255 255 / var(--detail, 0)); font-size: 14px; line-height: 1.5; border: 1px solid #ffffffb3; border-radius: var(--radius, 50%) !important; box-shadow: 0 2px 6px #18233305, 0 12px 36px #1823330b, 0 0 0 1px #18233308; }
         #window-layer > .desktop-window > :not(.tile-face) { opacity: var(--detail, 0); }
         #window-layer > .desktop-window:focus { outline: none; }
         #window-layer > .desktop-window.is-focused { box-shadow: 0 4px 12px #18233306, 0 24px 80px #18233318, 0 0 0 1px #18233308; }
@@ -32,12 +33,14 @@
         #window-layer .window-controls { display: flex; flex: none; margin-left: auto; }
         #window-layer .window-controls button { display: grid; place-items: center; flex: none; width: 32px; height: 32px; padding: 0; aspect-ratio: 1; border-radius: 50%; color: var(--muted); }
         #window-layer .window-controls button:hover { color: var(--ink); background: var(--surface); }
-        #window-layer .tile-face { position: absolute; inset: 0; z-index: 2; display: grid; align-content: center; justify-items: center; gap: 12px; width: 100%; border: 0; border-radius: inherit; color: #fff; background: linear-gradient(150deg, color-mix(in srgb, var(--tile), white 10%), var(--tile)); opacity: calc(1 - var(--detail, 0)); cursor: pointer; }
+        #window-layer .tile-face { position: absolute; inset: 0; z-index: 2; display: grid; align-content: center; justify-items: center; gap: 12px; width: 100%; border: 1px solid #ffffffbf; border-radius: inherit; color: var(--ink); background: linear-gradient(145deg, #ffffffe0, #ffffff80 48%, color-mix(in srgb, var(--tint) 82%, transparent)); backdrop-filter: blur(14px) saturate(1.15); box-shadow: inset 1px 1px 1px #ffffffcc, inset -1px -1px 1px #ffffff66; opacity: calc(1 - var(--detail, 0)); cursor: pointer; }
         #window-layer .tile-face[hidden] { display: none; }
-        #window-layer .tile-face:focus-visible { outline: 5px solid white; outline-offset: -10px; }
+        #window-layer .tile-face:focus-visible { outline: 3px solid var(--accent); outline-offset: -8px; }
+        #window-layer .tile-icon { color: var(--accent); }
+        .no-animations #window-layer .tile-face { backdrop-filter: none; background: var(--tint); }
         .ui-icon { display: block; width: 20px; height: 20px; flex: none; }
         #window-layer .window-controls .ui-icon { min-width: 20px; min-height: 20px; aspect-ratio: 1; }
-        #window-layer .tile-icon .ui-icon { width: var(--icon-size, 68px); height: var(--icon-size, 68px); stroke-width: 1.6; }
+        #window-layer .tile-icon .ui-icon { width: var(--icon-size, 68px); height: var(--icon-size, 68px); stroke-width: 1.75; }
         #window-layer .tile-title { max-width: 78%; font-size: var(--label-size, 18px); font-weight: 500; line-height: 1.3; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
         #window-layer .tile-title[hidden] { display: none !important; }
         #map-toolbar { position: fixed; inset: 0 0 auto; z-index: 10; display: flex; align-items: center; justify-content: space-between; height: 64px; padding: 0 24px; gap: 12px; }
@@ -45,11 +48,10 @@
         #map-toolbar button:hover { color: #202632; background: #fffffff0; }
         #map-toolbar button:focus-visible { outline: 2px solid #697382; outline-offset: 2px; }
         .no-animations #map-toolbar button { backdrop-filter: none; background: #fff; }
-        @media (prefers-reduced-transparency: reduce), (prefers-contrast: more) { #map-toolbar button { backdrop-filter: none; background: #fff; border-color: #a1a8b2; } }
+        @media (prefers-reduced-transparency: reduce), (prefers-contrast: more) { #map-toolbar button, #window-layer .tile-face { backdrop-filter: none; background: #fff; border-color: #a1a8b2; } }
         #map-home { display: flex; align-items: center; gap: 10px; padding: 0 12px; font-size: 16px; font-weight: 500; letter-spacing: -.03em; }
         #map-home .ui-icon { width: 28px; height: 28px; }
         @media (max-width: 599px) {
-            #desktop { inset: 60px 0 54px; }
             #map-toolbar { height: 60px; padding: 0 8px; }
             #map-home { font-size: 14px; }
         }
@@ -62,7 +64,7 @@
         .desktop-window .ui-field { width: 100%; min-width: 0; min-height: 38px; padding: 9px 12px; color: var(--ink); background: var(--surface); border: 1px solid var(--line); font: inherit; font-size: 14px; transition: background .15s, border-color .15s; }
         .desktop-window .ui-field::placeholder { color: #8b94a2; }
         .desktop-window .ui-field:focus { background: #fff; border-color: var(--accent); }
-        .desktop-window .ui-button { display: inline-flex; align-items: center; justify-content: center; gap: 8px; min-height: 36px; padding: 8px 16px; border: 1px solid transparent; border-radius: 999px; color: #fff; background: var(--accent); font-size: 13px; font-weight: 600; line-height: 1.4; transition: background .15s, color .15s, border-color .15s; }
+        .desktop-window .ui-button { display: inline-flex; align-items: center; justify-content: center; gap: 8px; min-height: 36px; padding: 8px 16px; border: 1px solid transparent; border-radius: 999px; color: #fff; background: var(--accent); font-size: 14px; font-weight: 600; line-height: 1.4; transition: background .15s, color .15s, border-color .15s; }
         .desktop-window .ui-button:hover:not(:disabled, .is-running, .is-secondary, .is-ghost) { background: color-mix(in srgb, var(--accent), black 10%); }
         .desktop-window .ui-button.is-secondary, .desktop-window .ui-button.is-running { color: var(--ink); background: var(--surface); border-color: transparent; }
         .desktop-window .ui-button.is-secondary:hover:not(:disabled), .desktop-window .ui-button.is-running:hover:not(:disabled) { background: var(--surface); border-color: #d4d9e1; }
@@ -72,7 +74,7 @@
         .desktop-window .ui-icon-button { display: inline-grid; place-items: center; flex: none; width: 36px; height: 36px; padding: 0; border: 1px solid transparent; border-radius: 50%; color: var(--muted); background: transparent; }
         .desktop-window .ui-icon-button:hover:not(:disabled) { color: var(--ink); background: var(--surface); }
         .desktop-window .ui-segmented { display: inline-flex; align-items: center; gap: 3px; padding: 3px; border: 1px solid var(--line); border-radius: 999px; background: var(--surface); }
-        .desktop-window .ui-segmented > button { flex: 1; min-height: 30px; padding: 6px 12px; border-radius: 999px; color: var(--muted); font-size: 12px; font-weight: 500; white-space: nowrap; }
+        .desktop-window .ui-segmented > button { flex: 1; min-height: 30px; padding: 6px 12px; border-radius: 999px; color: var(--muted); font-size: 13px; font-weight: 500; white-space: nowrap; }
         .desktop-window .ui-segmented > button:is([aria-pressed="true"], [aria-selected="true"]) { color: var(--ink); background: #fff; box-shadow: 0 1px 3px #18233314; }
         .desktop-window :is(.ui-button, .ui-icon-button, .ui-segmented > button, .window-controls button):active:not(:disabled), #map-toolbar button:active:not(:disabled) { filter: brightness(.94); }
         .desktop-window .ui-caption { color: var(--muted); font-size: 12px; line-height: 1.5; }
@@ -117,11 +119,22 @@
         .core-panel #user-prompt::placeholder { color: #858f9e; }
         .core-panel .core-meta { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 4px 12px; margin-top: 9px; color: var(--muted); font-size: 11px; }
         .core-panel #model-btn { max-width: 190px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-        @media (max-width: 599px) { .desktop-window .ui-body, .core-panel #activity-log { padding: 20px; } }
+        @media (max-width: 599px) { .desktop-window { font-size: 15px; } .desktop-window .ui-body, .core-panel #activity-log { padding: 20px; } .desktop-window .ui-label, .desktop-window .ui-caption { font-size: 13px; } }
         @media (pointer: coarse) { .desktop-window button, .desktop-window summary, .desktop-window .ui-button, .desktop-window .ui-segmented > button { min-height: 44px; } #window-layer .window-controls button, .desktop-window .ui-icon-button { width: 44px; height: 44px; } .desktop-window .ui-field, .core-panel #user-prompt { font-size: 16px; } }
     </style>
 </head>
 <body class="restoring overflow-hidden relative w-screen h-screen">
+
+    <svg id="desktop-wallpaper" viewBox="0 0 1600 1000" preserveAspectRatio="xMidYMid slice" aria-hidden="true" focusable="false">
+        <defs>
+            <radialGradient id="wallpaper-sky" cx="24%" cy="12%" r="100%"><stop stop-color="#f5f7fc"/><stop offset=".55" stop-color="#d8e2f6"/><stop offset="1" stop-color="#c5c9ec"/></radialGradient>
+            <linearGradient id="wallpaper-blue" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#c3d7fa"/><stop offset=".48" stop-color="#83a8e6"/><stop offset="1" stop-color="#b5b9e5"/></linearGradient>
+            <linearGradient id="wallpaper-mint" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#e2edf5"/><stop offset=".6" stop-color="#a2cecc"/><stop offset="1" stop-color="#d4e9e3"/></linearGradient>
+        </defs>
+        <rect width="1600" height="1000" fill="url(#wallpaper-sky)"/>
+        <path d="M-160 920C130 1030 410 480 710 420S1340 560 1760-80V1120H-160Z" fill="url(#wallpaper-blue)"/>
+        <path d="M-140 1050C300 1170 450 660 760 640S1190 790 1750 440V1120H-140Z" fill="url(#wallpaper-mint)"/>
+    </svg>
 
     <main id="desktop" aria-label="Application map" tabindex="0" aria-busy="true" inert><div id="window-layer">
     <!-- GENESIS WINDOW: CORE -->
@@ -227,7 +240,7 @@ The page is rebuilt on every load by replaying all recorded run_js scripts, in o
 - Persist every tile's user data with `ouroboros.getState(tileId, defaultValue)` and `ouroboros.setState(tileId, value)`. Values must be JSON data. The getter returns a copy; save after user changes and render from that data. For example, read `{count: 0}` when creating a counter, then save the updated count in its click handler. This preserves content across reloads, exports, imports and history restore. Use this API for notes, tasks, editor text, progress and other user-owned content; do not store that content in localStorage, sessionStorage, IndexedDB or only in a closure. Keep the tile id stable when replacing it and preserve its existing data. The host restores saved data before replay; do not replace the `ouroboros` API.
 
 ## Rules
-- Never modify or remove #ouroboros-core, #ouroboros-settings, #map-toolbar, the desktop containers, or the ouroboros-* script blocks. You may append windows to #window-layer.
+- Never modify or remove #ouroboros-core, #ouroboros-settings, #map-toolbar, #desktop-wallpaper, the desktop containers, or the ouroboros-* script blocks. You may append windows to #window-layer.
 - Build each feature as a window with a stable unique id and classes `draggable resizable`. Give it a direct `.window-header` child containing an h2 title, and a `.ui-body` content area. Append it to #window-layer. Set data-window-icon to a Lucide icon name in PascalCase, such as CalendarDays, StickyNote, Timer, Palette, Thermometer or Tally5. Choose from the full library; check `lucide.icons[name]` before using it. For icons inside the app, use `lucide.createElement(lucide.icons.IconName)`. Never use emoji, letters or pasted SVG paths as icons.
 - Previews are 320px square. Choose focused dimensions appropriate to the content with data-width and data-height in pixels (default 480 × 520). For example, a counter can be 360 × 320, notes 420 × 640, and a chart 900 × 560. Use "fill" for a dimension only when the app benefits from filling that axis. Optional data-aspect-ratio (e.g. "1" or "16/9") fits a fixed shape inside the preferred dimensions. The host centers the app and keeps it within the viewport; allow inner scrolling where needed.
 - Apps have two views: a compact honeycomb map and an expanded desktop where all apps are interactive. Small map tiles show only icons; zooming in reveals content and focuses one app. Leaving focus restores the originating view, preserving the expanded desktop's scroll position. The home button returns to that overview, then toggles between the two views. Apps stay mounted across transitions. The host handles all placement, sizing, zoom, focus and navigation; keep content responsive and do not build your own window controls.
@@ -245,6 +258,7 @@ The page is rebuilt on every load by replaying all recorded run_js scripts, in o
 - Compose the screen with whitespace and alignment. Use the provided 24px content padding (20px on phones), 16–24px between sections and 8px within control groups. Use three clear text levels rather than making everything equally prominent: a main value/content area, readable 14px body text, and 12px muted labels. Use `ui-value` for a large numeric result when useful. Fit the chosen window size and 390px mobile width; wrap groups or allow inner scrolling instead of shrinking text or squeezing every control onto one row.
 - Use the shared controls: `ui-label`, `ui-field`, `ui-button`, `ui-button is-secondary`, `ui-button is-ghost`, and `ui-icon-button`. Use the same size for related actions and distinguish importance with style. Icon buttons need an accessible name and a Lucide icon. `ui-segmented` groups short mutually exclusive choices; set aria-pressed on its buttons. `ui-disclosure` styles a native details/summary for occasional options. `ui-caption` is secondary text, not a place for extra instructions. Use semantic controls, visible press/focus states and concise action verbs; touch targets should be at least 44px.
 - The host supplies a white surface, a quiet header with the app's icon, fine borders and softly rounded controls. Keep the assigned app color. Use `var(--ink)` for text, `var(--muted)` for secondary text, `var(--line)` for separators, `var(--surface)` for a recessed group, `var(--accent)` for the primary action and `var(--tint)` for a subtle selection. Use Tailwind for layout. Separate content with spacing or a hairline before adding a box; avoid nested cards, decorative badges, heavy shadows and unrelated accent colors. Use task-specific visuals, such as a timer ring or a meaningful chart, only when they help the task.
+- Use imagery when the content calls for it, such as places, recipes or album covers. Find and verify real image URLs and reuse terms; include attribution when required and handle loading or failure. Never invent image URLs or replace a needed photograph or detailed illustration with piles of decorative CSS. Utilities can be complete with typography, controls and meaningful data visuals. This toolset has no image-generation tool: do not claim to generate image assets; if a custom image is essential, explain what asset is needed while completing the rest of the app.
 - Finish the behavior, not just the appearance: handle empty, selected, disabled, loading and error states that apply; validate inputs near the field; preserve edits. Before finishing, remove redundant text and controls, then verify the main action and check for clipped content or horizontal overflow at both current and mobile widths with test_js. Do not claim visual inspection from DOM checks alone.
     </script>
 
@@ -256,7 +270,7 @@ The page is rebuilt on every load by replaying all recorded run_js scripts, in o
         // --- CONSTANTS ---
         const MAX_STEPS = 40;
         const SETTINGS_KEY = 'ouroboros:settings';
-        const HARNESS = '#ouroboros-core, #ouroboros-settings, #map-toolbar, #ouroboros-system_prompt, #ouroboros-state';
+        const HARNESS = '#ouroboros-core, #ouroboros-settings, #map-toolbar, #desktop-wallpaper, #ouroboros-system_prompt, #ouroboros-state';
         const AsyncFunction = Object.getPrototypeOf(async function () {}).constructor;
         const $ = id => document.getElementById(id);
 
@@ -772,11 +786,13 @@ The page is rebuilt on every load by replaying all recorded run_js scripts, in o
         // --- APP MAP ---
         const TILE_SIZE = 320, SPACING = 384, FOCUS_START = 1.18, FOCUS_END = 1.9;
         const TILE_COLORS = [
-            ['#375d58', '#eef4f2'], ['#4a607c', '#eef2f8'], ['#715d7b', '#f3eff7'],
-            ['#895f50', '#f8f0ec'], ['#66704e', '#f2f4ec'], ['#825d6e', '#f7eff3'],
+            ['#24695b', '#edf5f1'], ['#2864b4', '#eef3fc'], ['#7451ad', '#f3eff9'],
+            ['#a45732', '#faf1eb'], ['#5f7036', '#f2f5e9'], ['#aa466b', '#faeef3'],
         ];
-        const desktop = $('desktop'), layer = $('window-layer'), windows = new Map();
+        const desktop = $('desktop'), layer = $('window-layer'), toolbar = $('map-toolbar'), windows = new Map();
         const camera = { x: 0, y: 0, zoom: .7, expansion: 0, focus: null };
+        const reducedMotion = matchMedia('(prefers-reduced-motion: reduce)');
+        const animationsDisabled = () => settings.disableAnimations || reducedMotion.matches;
         const clamp = (n, min, max) => Math.min(max, Math.max(min, n));
         const mix = (a, b, t) => a * (1 - t) + b * t;
         const smooth = t => t * t * (3 - 2 * t);
@@ -790,7 +806,8 @@ The page is rebuilt on every load by replaying all recorded run_js scripts, in o
         }
 
         function appSize(el, width, height, padding = 24) {
-            const maxW = Math.max(1, width - padding), maxH = Math.max(1, height - padding);
+            // Centered apps clear the floating toolbar; the canvas still fills the viewport.
+            const maxW = Math.max(1, width - padding), maxH = Math.max(1, height - Math.max(padding, toolbar.offsetHeight * 2));
             const preferred = (value, max, fallback) => value === 'fill' ? max : Number.isFinite(+value) && +value > 0 ? +value : fallback;
             let w = preferred(el.dataset.width, maxW, 480), h = preferred(el.dataset.height, maxH, 520);
             const [a, b = 1] = (el.dataset.aspectRatio || '').split('/').map(Number), ratio = a / b;
@@ -816,7 +833,7 @@ The page is rebuilt on every load by replaying all recorded run_js scripts, in o
 
         function expandedLayout(width, height) {
             const rects = new Map();
-            let row = [], rowWidth = 0, rowHeight = 0, y = 24;
+            let row = [], rowWidth = 0, rowHeight = 0, y = toolbar.offsetHeight + 16;
             const finishRow = () => {
                 let x = (width - rowWidth) / 2;
                 for (const [win, size] of row) { rects.set(win, { x, y, ...size }); x += size.w + 20; }
@@ -834,7 +851,7 @@ The page is rebuilt on every load by replaying all recorded run_js scripts, in o
 
         function renderMap() {
             cancelAnimationFrame(renderFrame); renderFrame = 0;
-            document.documentElement.classList.toggle('no-animations', settings.disableAnimations);
+            document.documentElement.classList.toggle('no-animations', animationsDisabled());
             const spread = camera.expansion, switching = spread !== Number(expanded);
             const detail = mix(smooth(clamp((camera.zoom - .82) / .32, 0, 1)), 1, spread);
             const focus = focusProgress();
@@ -864,7 +881,7 @@ The page is rebuilt on every load by replaying all recorded run_js scripts, in o
                 const y = mix(mix(mapY, slot.y, spread), (height - size.h) / 2 + scrollY, amount);
                 const focused = selected && focus > .95 && !switching;
                 const interactive = !switching && (focused || (expanded && focus === 0));
-                Object.assign(win.el.style, { width: `${w / scale}px`, height: `${h / scale}px`, transform: `translate(${x}px, ${y}px) scale(${scale})`, zIndex: selected ? '3' : '1', filter: selected || settings.disableAnimations ? 'none' : `blur(${focus * 7 / scale}px)`, opacity: selected ? '1' : String(1 - focus * .75) });
+                Object.assign(win.el.style, { width: `${w / scale}px`, height: `${h / scale}px`, transform: `translate(${x}px, ${y}px) scale(${scale})`, zIndex: selected ? '3' : '1', filter: selected || animationsDisabled() || !focus ? 'none' : `blur(${focus * 7 / scale}px)`, opacity: selected ? '1' : String(1 - focus * .75) });
                 win.el.style.setProperty('--detail', detail);
                 win.el.style.setProperty('--radius', `${mix(TILE_SIZE / 2, 22, detail)}px`);
                 win.el.style.setProperty('--label-size', `${Math.max(18, 12 / camera.zoom)}px`);
@@ -892,10 +909,10 @@ The page is rebuilt on every load by replaying all recorded run_js scripts, in o
         function moveCamera(next, animate = true, done = () => {}) {
             cancelAnimationFrame(animation);
             cancelAnimationFrame(renderFrame); renderFrame = 0;
-            if (!animate || settings.disableAnimations || matchMedia('(prefers-reduced-motion: reduce)').matches) { Object.assign(camera, next); renderMap(); done(); return; }
+            if (!animate || animationsDisabled()) { Object.assign(camera, next); renderMap(); done(); return; }
             const from = { ...camera }, start = performance.now();
             const frame = now => {
-                const t = settings.disableAnimations ? 1 : clamp((now - start) / 480, 0, 1), ease = smooth(t);
+                const t = animationsDisabled() ? 1 : clamp((now - start) / 480, 0, 1), ease = smooth(t);
                 for (const key of ['x', 'y', 'zoom', 'expansion']) camera[key] = mix(from[key], next[key] ?? from[key], ease);
                 renderMap();
                 if (t < 1) animation = requestAnimationFrame(frame);
@@ -910,7 +927,7 @@ The page is rebuilt on every load by replaying all recorded run_js scripts, in o
             const tiles = [...windows.values()];
             const left = Math.min(...tiles.map(w => w.x)) - TILE_SIZE / 2, right = Math.max(...tiles.map(w => w.x)) + TILE_SIZE / 2;
             const top = Math.min(...tiles.map(w => w.y)) - TILE_SIZE / 2, bottom = Math.max(...tiles.map(w => w.y)) + TILE_SIZE / 2;
-            moveCamera({ x: (left + right) / 2, y: (top + bottom) / 2, expansion: 0, zoom: clamp(Math.min((desktop.clientWidth - 56) / (right - left), (desktop.clientHeight - 56) / (bottom - top)), .12, .78) }, animate);
+            moveCamera({ x: (left + right) / 2, y: (top + bottom) / 2, expansion: 0, zoom: clamp(Math.min((desktop.clientWidth - 56) / (right - left), (desktop.clientHeight - toolbar.offsetHeight * 2 - 56) / (bottom - top)), .12, .78) }, animate);
         }
 
         function focusApp(id, animate = true) {
@@ -1117,6 +1134,7 @@ The page is rebuilt on every load by replaying all recorded run_js scripts, in o
                 }
             });
             addEventListener('resize', () => !expanded && atHome ? overview(false) : renderMap());
+            reducedMotion.addEventListener('change', renderMap);
         }
 
         // --- UI ---
