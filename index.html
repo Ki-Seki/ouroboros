@@ -10,7 +10,7 @@
     <style>
         html, body { touch-action: pan-x pan-y; overscroll-behavior: none; }
         .no-animations *, .no-animations *::before, .no-animations *::after { animation: none !important; transition: none !important; scroll-behavior: auto !important; }
-        body { margin: 0; background: #eff1eb; color: #293b34; font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, sans-serif; }
+        body { margin: 0; background: #f1f3f6; color: #202632; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; -webkit-font-smoothing: antialiased; }
         body.restoring > :not(#map-toolbar) { visibility: hidden !important; opacity: 0 !important; }
         #desktop { position: fixed; inset: 64px 0 36px; overflow: hidden; isolation: isolate; overscroll-behavior: contain; scrollbar-gutter: stable; cursor: grab; }
         #desktop, #desktop * { touch-action: none; }
@@ -21,15 +21,17 @@
         #desktop.is-expanded { overflow: auto; cursor: default; }
         #desktop.is-switching { overflow: hidden; pointer-events: none; }
         #desktop.is-expanded.has-overlay { overflow: hidden; }
-        #window-layer > .desktop-window { --tile: #375d58; --tint: #e5eeeb; --line: #dce2dc; --muted: #68766f; --accent: var(--tile); position: absolute; left: 0; top: 0; display: flex; flex-direction: column; box-sizing: border-box; overflow: hidden; transform-origin: 0 0; color: #293b34; background: #fffefb; font-size: 14px; line-height: 1.5; border: 1px solid var(--line); border-radius: var(--radius, 50%) !important; box-shadow: 0 8px 28px #293b3408; }
+        #window-layer > .desktop-window { --tile: #375d58; --tint: #eef4f2; --ink: #202632; --muted: #697382; --line: #e7eaf0; --surface: #f6f7f9; --accent: var(--tile); position: absolute; left: 0; top: 0; display: flex; flex-direction: column; box-sizing: border-box; overflow: hidden; transform-origin: 0 0; color: var(--ink); background: #fff; font-size: 14px; line-height: 1.5; border: 1px solid #ffffffb3; border-radius: var(--radius, 50%) !important; box-shadow: 0 2px 6px #18233305, 0 12px 36px #1823330b, 0 0 0 1px #18233308; }
         #window-layer > .desktop-window > :not(.tile-face) { opacity: var(--detail, 0); }
-        #window-layer > .desktop-window.is-focused { box-shadow: 0 12px 48px #293b3412; }
-        #window-layer > .desktop-window > .window-header { display: flex; align-items: center; gap: 8px; min-height: 52px; padding: 8px 12px 8px 20px; flex-shrink: 0; color: var(--tile); background: var(--tint); border-bottom: 1px solid var(--line); cursor: inherit; user-select: none; }
-        #window-layer .window-header > :is(h1,h2,h3) { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 18px; font-weight: 500; letter-spacing: -.02em; }
+        #window-layer > .desktop-window.is-focused { box-shadow: 0 4px 12px #18233306, 0 24px 80px #18233318, 0 0 0 1px #18233308; }
+        #window-layer > .desktop-window > .window-header { display: flex; align-items: center; gap: 10px; min-height: 56px; padding: 10px 12px 10px 20px; flex-shrink: 0; color: var(--ink); background: #fff; border-bottom: 1px solid var(--line); cursor: inherit; user-select: none; }
+        #window-layer .window-header > :is(h1,h2,h3) { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 14px; font-weight: 600; letter-spacing: -.015em; }
+        #window-layer .window-icon { display: grid; place-items: center; flex: none; width: 28px; height: 28px; border-radius: 8px; color: var(--accent); background: var(--tint); }
+        #window-layer .window-icon .ui-icon { width: 16px; height: 16px; }
         #window-layer .window-controls { display: flex; flex: none; margin-left: auto; }
-        #window-layer .window-controls button { display: grid; place-items: center; flex: none; width: 36px; height: 36px; padding: 0; aspect-ratio: 1; border-radius: 50%; color: var(--tile); }
-        #window-layer .window-controls button:hover { background: #00000008; }
-        #window-layer .tile-face { position: absolute; inset: 0; z-index: 2; display: grid; align-content: center; justify-items: center; gap: 12px; width: 100%; border: 0; border-radius: inherit; color: #fffefb; background: linear-gradient(145deg, color-mix(in srgb, var(--tile), white 14%), var(--tile)); opacity: calc(1 - var(--detail, 0)); cursor: pointer; }
+        #window-layer .window-controls button { display: grid; place-items: center; flex: none; width: 32px; height: 32px; padding: 0; aspect-ratio: 1; border-radius: 9px; color: var(--muted); }
+        #window-layer .window-controls button:hover { color: var(--ink); background: var(--surface); }
+        #window-layer .tile-face { position: absolute; inset: 0; z-index: 2; display: grid; align-content: center; justify-items: center; gap: 12px; width: 100%; border: 0; border-radius: inherit; color: #fff; background: linear-gradient(150deg, color-mix(in srgb, var(--tile), white 10%), var(--tile)); opacity: calc(1 - var(--detail, 0)); cursor: pointer; }
         #window-layer .tile-face[hidden] { display: none; }
         #window-layer .tile-face:focus-visible { outline: 5px solid white; outline-offset: -10px; }
         .ui-icon { display: block; width: 20px; height: 20px; flex: none; }
@@ -38,9 +40,9 @@
         #window-layer .tile-title { max-width: 78%; font-size: var(--label-size, 18px); font-weight: 500; line-height: 1.3; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
         #window-layer .tile-title[hidden] { display: none !important; }
         #map-toolbar { position: fixed; inset: 0 0 auto; z-index: 10; display: flex; align-items: center; justify-content: space-between; height: 64px; padding: 0 24px; gap: 12px; }
-        #map-toolbar button { min-width: 44px; min-height: 44px; border: 0; border-radius: 22px; color: #375d58; background: transparent; }
-        #map-toolbar button:hover { background: #375d5810; }
-        #map-toolbar button:focus-visible { outline: 2px solid #375d58; outline-offset: 2px; }
+        #map-toolbar button { min-width: 44px; min-height: 44px; border: 0; border-radius: 12px; color: #414b5a; background: transparent; }
+        #map-toolbar button:hover { color: #202632; background: #ffffffb3; }
+        #map-toolbar button:focus-visible { outline: 2px solid #697382; outline-offset: 2px; }
         #map-home { display: flex; align-items: center; gap: 10px; padding: 0 12px; font-size: 16px; font-weight: 500; letter-spacing: -.03em; }
         #map-home .ui-icon { width: 28px; height: 28px; }
         @media (max-width: 599px) {
@@ -50,24 +52,38 @@
         }
         .desktop-window button, .desktop-window summary { touch-action: manipulation; }
         .desktop-window button:disabled { opacity: .45; cursor: default; }
-        .desktop-window :is(button, summary, input, textarea, select) { border-radius: 8px; box-shadow: none; }
-        .desktop-window :is(button, summary, input, textarea, select):focus-visible { outline: 2px solid var(--tile); outline-offset: 3px; }
-        .desktop-window .ui-body { flex: 1; min-height: 0; overflow: auto; padding: 16px; }
-        .desktop-window .ui-label { display: grid; gap: 6px; color: var(--muted); font-size: 12px; }
-        .desktop-window .ui-field { width: 100%; min-width: 0; padding: 8px 10px; color: #293b34; background: white; border: 1px solid #cdd8d0; font-size: 13px; }
-        .desktop-window .ui-button { padding: 7px 13px; border: 1px solid var(--tile); color: white; background: var(--tile); font-size: 13px; font-weight: 500; }
-        .desktop-window .ui-button:hover:not(:disabled, .is-running, .is-secondary) { filter: brightness(.92); }
-        .desktop-window .ui-button.is-secondary, .desktop-window .ui-button.is-running { color: var(--tile); background: transparent; border-color: var(--line); }
-        .desktop-window .ui-button.is-secondary:hover:not(:disabled) { background: var(--tint); }
-        .desktop-window .ui-button.is-danger { color: #9a493e; }
+        .desktop-window :is(button, summary, input, textarea, select) { border-radius: 10px; box-shadow: none; }
+        .desktop-window :is(button, summary, input, textarea, select):focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+        .desktop-window .ui-body { flex: 1; min-height: 0; overflow: auto; padding: 24px; scrollbar-width: thin; scrollbar-color: #d4d9e1 transparent; }
+        .desktop-window .ui-label { display: grid; gap: 8px; color: var(--muted); font-size: 12px; font-weight: 500; }
+        .desktop-window .ui-field { width: 100%; min-width: 0; min-height: 38px; padding: 9px 12px; color: var(--ink); background: var(--surface); border: 1px solid var(--line); font: inherit; font-size: 14px; transition: background .15s, border-color .15s; }
+        .desktop-window .ui-field::placeholder { color: #8b94a2; }
+        .desktop-window .ui-field:focus { background: #fff; border-color: var(--accent); }
+        .desktop-window .ui-button { display: inline-flex; align-items: center; justify-content: center; gap: 8px; min-height: 36px; padding: 8px 14px; border: 1px solid transparent; color: #fff; background: var(--accent); font-size: 13px; font-weight: 600; line-height: 1.4; transition: background .15s, color .15s, border-color .15s; }
+        .desktop-window .ui-button:hover:not(:disabled, .is-running, .is-secondary, .is-ghost) { background: color-mix(in srgb, var(--accent), black 10%); }
+        .desktop-window .ui-button.is-secondary, .desktop-window .ui-button.is-running { color: var(--ink); background: #fff; border-color: var(--line); }
+        .desktop-window .ui-button.is-secondary:hover:not(:disabled), .desktop-window .ui-button.is-running:hover:not(:disabled) { background: var(--surface); border-color: #d4d9e1; }
+        .desktop-window .ui-button.is-ghost { color: var(--muted); background: transparent; }
+        .desktop-window .ui-button.is-ghost:hover:not(:disabled) { color: var(--ink); background: var(--surface); }
+        .desktop-window .ui-button.is-danger { color: #b44443; }
+        .desktop-window .ui-icon-button { display: inline-grid; place-items: center; flex: none; width: 36px; height: 36px; padding: 0; border: 1px solid transparent; color: var(--muted); background: transparent; }
+        .desktop-window .ui-icon-button:hover:not(:disabled) { color: var(--ink); background: var(--surface); }
+        .desktop-window .ui-segmented { display: inline-flex; align-items: center; gap: 3px; padding: 3px; border: 1px solid var(--line); border-radius: 11px; background: var(--surface); }
+        .desktop-window .ui-segmented > button { flex: 1; min-height: 30px; padding: 6px 12px; border-radius: 8px; color: var(--muted); font-size: 12px; font-weight: 500; white-space: nowrap; }
+        .desktop-window .ui-segmented > button:is([aria-pressed="true"], [aria-selected="true"]) { color: var(--ink); background: #fff; box-shadow: 0 1px 3px #18233314; }
+        .desktop-window .ui-caption { color: var(--muted); font-size: 12px; line-height: 1.5; }
+        .desktop-window .ui-value { font-size: clamp(36px, 8vw, 56px); font-weight: 500; line-height: 1.1; letter-spacing: -.045em; font-variant-numeric: tabular-nums; }
+        .desktop-window .ui-disclosure { border-top: 1px solid var(--line); padding-top: 16px; }
+        .desktop-window .ui-disclosure > summary { color: var(--muted); font-size: 12px; font-weight: 500; cursor: pointer; }
+        .desktop-window .ui-disclosure[open] > summary { margin-bottom: 16px; }
         .core-panel [hidden] { display: none !important; }
         .core-panel summary { cursor: pointer; }
         .core-panel .core-quiet { color: var(--muted); font-size: 12px; padding: 6px 8px; }
         .core-panel .core-quiet:hover:not(:disabled) { background: #00000008; color: var(--tile); }
-        .core-panel .core-settings { display: grid; align-content: start; gap: 16px; width: 100%; max-width: 480px; align-self: center; }
+        .core-panel .core-settings { display: grid; align-content: start; gap: 24px; width: 100%; max-width: 480px; align-self: center; }
         .core-panel .settings-section { display: grid; gap: 12px; }
-        .core-panel .settings-section + .settings-section { padding-top: 16px; border-top: 1px solid var(--line); }
-        .core-panel .settings-section h3 { font-size: 13px; font-weight: 500; }
+        .core-panel .settings-section + .settings-section { padding-top: 24px; border-top: 1px solid var(--line); }
+        .core-panel .settings-section h3 { font-size: 12px; font-weight: 600; color: var(--ink); }
         .core-panel .settings-field { grid-template-columns: 64px minmax(0, 1fr); align-items: center; gap: 12px; }
         .core-panel .usage-table { width: 100%; border-collapse: collapse; font-size: 12px; font-variant-numeric: tabular-nums; }
         .core-panel .usage-table :is(th, td) { padding: 4px 0; text-align: right; font-weight: 400; }
@@ -76,10 +92,11 @@
         .core-panel .tile-list { display: grid; gap: 8px; }
         .core-panel .tile-list li { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
         .core-panel .tile-list span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-        .core-panel #activity-log { flex: 1; min-height: 0; overflow-y: auto; padding: 16px; font-size: 14px; line-height: 1.6; overflow-wrap: anywhere; scrollbar-width: thin; }
-        .core-panel .core-empty { padding: 32px 0; color: var(--muted); }
+        .core-panel #activity-log { flex: 1; min-height: 0; overflow-y: auto; padding: 24px; font-size: 14px; line-height: 1.6; overflow-wrap: anywhere; scrollbar-width: thin; }
+        .core-panel .core-empty { display: grid; align-content: center; gap: 8px; height: 100%; padding: 24px 0; color: var(--muted); }
+        .core-panel .core-empty h2 { color: var(--ink); font-size: 28px; font-weight: 500; line-height: 1.2; letter-spacing: -.035em; }
         .core-panel .core-task + .core-task { margin-top: 28px; }
-        .core-panel .task-prompt { margin: 0 0 16px; padding: 10px 12px; background: var(--tint); border-left: 2px solid var(--tile); white-space: pre-wrap; }
+        .core-panel .task-prompt { margin: 0 0 16px; padding: 12px 14px; background: var(--surface); border-radius: 12px; white-space: pre-wrap; }
         .core-panel .task-result p { margin: 8px 0; white-space: pre-wrap; }
         .core-panel .core-note { margin: 10px 0; color: var(--muted); font-size: 12px; white-space: pre-wrap; }
         .core-panel .is-error { color: #9a493e; }
@@ -88,14 +105,16 @@
         .core-panel .tool-entry summary { overflow-wrap: anywhere; }
         .core-panel .tool-entry pre { margin-top: 6px; padding: 8px; background: var(--tint); font: 11px/1.6 ui-monospace, monospace; white-space: pre-wrap; overflow-wrap: anywhere; }
         .core-panel #undo-btn { margin-top: 10px; padding-left: 0; }
-        .core-panel .core-composer { padding: 0 16px 16px; }
-        .core-panel .core-input { padding: 10px; border: 1px solid #cdd8d0; background: #fafbf8; }
-        .core-panel .core-input:focus-within { border-color: var(--tile); }
-        .core-panel #user-prompt { display: block; width: 100%; min-height: 54px; max-height: 160px; resize: none; padding: 2px; border: 0; background: transparent; font-size: 14px; line-height: 1.5; }
-        .core-panel #user-prompt::placeholder { color: #78857c; }
+        .core-panel .core-composer { padding: 0 20px 20px; }
+        .core-panel .core-input { padding: 12px; border: 1px solid var(--line); border-radius: 14px; background: var(--surface); transition: border-color .15s, background .15s; }
+        .core-panel .core-input:focus-within { border-color: color-mix(in srgb, var(--accent), white 35%); background: #fff; }
+        .core-panel #user-prompt { display: block; width: 100%; min-height: 60px; max-height: 160px; resize: none; padding: 2px; border: 0; border-radius: 0; background: transparent; font-size: 14px; line-height: 1.5; }
+        .core-panel #user-prompt:focus-visible { outline: none; }
+        .core-panel #user-prompt::placeholder { color: #858f9e; }
         .core-panel .core-meta { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 4px 12px; margin-top: 9px; color: var(--muted); font-size: 11px; }
         .core-panel #model-btn { max-width: 190px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-        @media (pointer: coarse) { .desktop-window button, .desktop-window summary { min-height: 44px; } #window-layer .window-controls button { width: 44px; height: 44px; } .desktop-window .ui-field, .core-panel #user-prompt { font-size: 16px; } }
+        @media (max-width: 599px) { .desktop-window .ui-body, .core-panel #activity-log { padding: 20px; } }
+        @media (pointer: coarse) { .desktop-window button, .desktop-window summary, .desktop-window .ui-button, .desktop-window .ui-segmented > button { min-height: 44px; } #window-layer .window-controls button, .desktop-window .ui-icon-button { width: 44px; height: 44px; } .desktop-window .ui-field, .core-panel #user-prompt { font-size: 16px; } }
     </style>
 </head>
 <body class="restoring overflow-hidden relative w-screen h-screen">
@@ -110,7 +129,7 @@
 
         <!-- Activity Log -->
         <div id="activity-log" class="select-text" aria-label="Conversation">
-            <div id="empty-state" class="core-empty"><p class="text-3xl font-light text-[var(--tile)] mb-3">Make room<br>for an idea.</p></div>
+            <div id="empty-state" class="core-empty"><h2>Make room<br>for an idea.</h2></div>
         </div>
         <button id="undo-btn" type="button" class="core-quiet" hidden>↶ Undo this change</button>
 
@@ -151,7 +170,7 @@
                         <tr><th scope="row">All time</th><td id="usage-total-input">0</td><td id="usage-total-output">0</td><td id="usage-total-total">0</td></tr>
                     </tbody>
                 </table>
-                <p id="usage-note" class="text-xs text-[var(--muted)]"><span id="usage-responses">0</span> responses recorded in this browser.</p>
+                <p id="usage-note" class="ui-caption"><span id="usage-responses">0</span> API responses</p>
             </section>
             <section class="settings-section" aria-labelledby="tiles-title">
                 <h3 id="tiles-title">Installed tiles</h3>
@@ -163,7 +182,6 @@
                     <select id="history-version" class="ui-field flex-1" aria-label="Saved version"></select>
                     <button id="rollback-btn" type="button" class="ui-button is-secondary shrink-0">Restore</button>
                 </div>
-                <p class="text-xs text-[var(--muted)]">Versions are saved after each task. The last 10 tasks are available here.</p>
                 <div class="flex flex-wrap gap-2">
                     <button id="arrange-settings-btn" type="button" class="ui-button is-secondary">Show all apps</button>
                     <button id="export-btn" type="button" class="ui-button is-secondary">Export HTML</button>
@@ -172,7 +190,6 @@
                     <button id="reset-btn" type="button" class="ui-button is-secondary is-danger">Reset canvas…</button>
                 </div>
                 <input id="import-file" type="file" accept=".html,.htm,text/html" hidden>
-                <p class="text-xs text-[var(--muted)]">Exports include saved tile data.</p>
             </section>
         </div>
     </section>
@@ -184,7 +201,7 @@
     <!-- EMBEDDED SYSTEM PROMPT (editable by users) -->
     <script type="text/plain" id="ouroboros-system_prompt">
 ## Role
-You are Ouroboros, a self-editing web page. The user asks for features; you build them by running JavaScript against the live DOM of this very page, using the tools below. Work as an agent: orient, act, verify, then stop.
+You are Ouroboros, a self-editing web page. Build small, finished applications around the user's task by running JavaScript against the live DOM, using the tools below. Work as an agent: orient, design, implement, verify, then stop.
 
 ## Tools and workflow
 - read_dom(selector, outline): inspect current markup. Use a narrow selector and outline=true first; request full HTML only where needed.
@@ -211,11 +228,19 @@ The page is rebuilt on every load by replaying all recorded run_js scripts, in o
 - Previews are 320px square. Choose focused dimensions appropriate to the content with data-width and data-height in pixels (default 480 × 520). For example, a counter can be 360 × 320, notes 420 × 640, and a chart 900 × 560. Use "fill" for a dimension only when the app benefits from filling that axis. Optional data-aspect-ratio (e.g. "1" or "16/9") fits a fixed shape inside the preferred dimensions. The host centers the app and keeps it within the viewport; allow inner scrolling where needed.
 - Apps have two views: a compact honeycomb map and an expanded desktop where all apps are interactive. Small map tiles show only icons; zooming in reveals content and focuses one app. Leaving focus restores the originating view, preserving the expanded desktop's scroll position. The home button returns to that overview, then toggles between the two views. Apps stay mounted across transitions. The host handles all placement, sizing, zoom, focus and navigation; keep content responsive and do not build your own window controls.
 - For in-app dragging, use Pointer Events and pointer capture on the drag handle. Cancel without saving on pointercancel, lostpointercapture or a second touch (the host owns pinch zoom); remove temporary listeners and drag indicators on every exit. Keep ordinary content scrolling available outside the handle.
-- Use the shared controls: `ui-label` for labels, `ui-field` for inputs/selects/textareas, `ui-button` for primary actions, `ui-button is-secondary` for secondary actions. The map uses circular colored tiles that open into softly rounded applications with warm-white content, dark text and clear typography. Each new window automatically receives a stable color from a coordinated muted palette of teal, blue, plum, clay, olive and rose; keep that color and use `var(--accent)` for emphasis, `var(--tint)` for subtle highlights and `var(--muted)` for secondary text. The desktop supplies 14px body text, 16px content padding, borders and focus styles. Use Tailwind for layout with 8px or 16px gaps. Use concise labels and omit gesture tips or instructions that repeat obvious actions. Keep content backgrounds transparent, without extra card shells, heavy shadows or unrelated color palettes. Larger light-weight numbers work well for key metrics; custom visuals should follow the user's request.
 - Keep code compact. No large inline images or data URIs.
 - Verify changed behavior with test_js, including saved data and the requested interaction path. Read-only checks can use read_dom/eval_js. Execution success or existing controls alone do not prove behavior. A keyboard test does not prove pointer dragging; distinguish checked behavior from unverified gestures or unavailable dependencies. When done, give a concise result and any material verification limit, with no tool calls. Ask only when the request is truly ambiguous.
 - Web access: `fetch('https://r.jina.ai/' + url)` returns readable Markdown; `fetch('https://corsproxy.io/?url=' + encodeURIComponent(url))` returns raw HTML.
 - Users may edit this prompt to customize you.
+
+## App design
+- Before coding, decide the main job, the most important content, and the next useful action. Choose a layout that suits the task: a converter puts the result first; a timer centers on time and one start/pause control; a list makes its rows the main interface. Do not default to a stack of labels, inputs, buttons and explanatory paragraphs.
+- Keep the first view focused: one dominant content area, at most one primary action and a small group of secondary actions. A live calculation needs no extra Convert button. Put occasional settings, history and destructive actions in a compact disclosure or contextual menu. Add only features needed for the request; do not invent dashboards, statistics, filters or toolbars to fill space.
+- Edit visible copy as carefully as code. Use short labels in the user's language. The window header already names the app: do not repeat that title, add a tagline, describe obvious controls, list features, explain storage/implementation, or show permanent "Ready"/"Saved automatically" messages. Show help only for a real decision or error, next to the affected control. Give empty states one useful next action. Never populate a user's app with invented personal data.
+- Compose the screen with whitespace and alignment. Use the provided 24px content padding (20px on phones), 16–24px between sections and 8px within control groups. Use three clear text levels rather than making everything equally prominent: a main value/content area, readable 14px body text, and 12px muted labels. Use `ui-value` for a large numeric result when useful. Fit the chosen window size and 390px mobile width; wrap groups or allow inner scrolling instead of shrinking text or squeezing every control onto one row.
+- Use the shared controls: `ui-label`, `ui-field`, `ui-button`, `ui-button is-secondary`, `ui-button is-ghost`, and `ui-icon-button`. Icon buttons need an accessible name and a Lucide icon. `ui-segmented` groups short mutually exclusive choices; set aria-pressed on its buttons. `ui-disclosure` styles a native details/summary for occasional options. `ui-caption` is secondary text, not a place for extra instructions. Use semantic controls and keyboard focus; touch targets should be at least 44px.
+- The host supplies a white surface, a quiet header with the app's icon, fine borders and softly rounded controls. Keep the assigned app color. Use `var(--ink)` for text, `var(--muted)` for secondary text, `var(--line)` for separators, `var(--surface)` for a recessed group, `var(--accent)` for the primary action and `var(--tint)` for a subtle selection. Use Tailwind for layout. Separate content with spacing or a hairline before adding a box; avoid nested cards, decorative badges, heavy shadows and unrelated accent colors. Use task-specific visuals, such as a timer ring or a meaningful chart, only when they help the task.
+- Finish the behavior, not just the appearance: handle empty, selected, disabled, loading and error states that apply; validate inputs near the field; preserve edits. Before finishing, remove redundant text and controls, then verify the main action and check for clipped content or horizontal overflow at both current and mobile widths with test_js. Do not claim visual inspection from DOM checks alone.
     </script>
 
     <!-- EMBEDDED STATE (filled on export so the file carries its history and mutations) -->
@@ -742,8 +767,8 @@ The page is rebuilt on every load by replaying all recorded run_js scripts, in o
         // --- APP MAP ---
         const TILE_SIZE = 320, SPACING = 384, FOCUS_START = 1.18, FOCUS_END = 1.9;
         const TILE_COLORS = [
-            ['#375d58', '#e5eeeb'], ['#4a607c', '#e7edf4'], ['#715d7b', '#efe9f2'],
-            ['#895f50', '#f3e9e3'], ['#66704e', '#edf0e3'], ['#825d6e', '#f3e8ee'],
+            ['#375d58', '#eef4f2'], ['#4a607c', '#eef2f8'], ['#715d7b', '#f3eff7'],
+            ['#895f50', '#f8f0ec'], ['#66704e', '#f2f4ec'], ['#825d6e', '#f7eff3'],
         ];
         const desktop = $('desktop'), layer = $('window-layer'), windows = new Map();
         const camera = { x: 0, y: 0, zoom: .7, expansion: 0, focus: null };
@@ -935,11 +960,14 @@ The page is rebuilt on every load by replaying all recorded run_js scripts, in o
                     const face = document.createElement('button');
                     face.type = 'button'; face.className = 'tile-face';
                     face.innerHTML = '<span class="tile-icon" aria-hidden="true"></span><span class="tile-title"></span>';
-                    win = { el, face, tone: win?.tone ?? nextTone++ % TILE_COLORS.length, title: '' };
+                    const mark = document.createElement('div');
+                    mark.className = 'window-icon'; mark.setAttribute('aria-hidden', 'true');
+                    win = { el, face, mark, tone: win?.tone ?? nextTone++ % TILE_COLORS.length, title: '' };
                     windows.set(el.id, win);
                     if (el.parentElement !== layer) layer.append(el);
                     el.hidden = false; el.tabIndex = -1; el.classList.add('desktop-window'); el.setAttribute('role', 'region');
                     header.querySelector('.window-controls')?.remove();
+                    header.querySelector(':scope > .window-icon')?.remove(); header.prepend(mark);
                     header.insertAdjacentHTML('beforeend', '<div class="window-controls"><button type="button" data-window-action="home" aria-label="All apps" title="All apps"></button></div>');
                     drawIcon(header.querySelector('.window-controls button'), 'Minimize2');
                     el.append(face); changed = true; added = el.id;
@@ -951,7 +979,7 @@ The page is rebuilt on every load by replaying all recorded run_js scripts, in o
                     win.face.querySelector('.tile-title').textContent = title;
                 }
                 const icon = Object.hasOwn(lucide.icons, el.dataset.windowIcon) ? el.dataset.windowIcon : 'AppWindow';
-                if (win.icon !== icon) { win.icon = icon; drawIcon(win.face.querySelector('.tile-icon'), icon); }
+                if (win.icon !== icon) { win.icon = icon; drawIcon(win.face.querySelector('.tile-icon'), icon); drawIcon(win.mark, icon); }
                 const sizeKey = [el.dataset.width, el.dataset.height, el.dataset.aspectRatio].join('|');
                 if (win.sizeKey !== sizeKey) { win.sizeKey = sizeKey; layoutCache = null; }
                 Object.assign(el.style, { position: 'absolute', left: '0px', top: '0px', margin: '0px' });
