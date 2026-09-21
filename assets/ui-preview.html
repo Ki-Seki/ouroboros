@@ -137,7 +137,7 @@
         .core-panel .message-images { display: grid; grid-template-columns: repeat(auto-fit, minmax(96px, 1fr)); align-items: start; gap: 8px; }
         .core-panel .message-images .image-item { width: auto; height: auto; min-width: 0; }
         .core-panel .message-images .image-item a { height: auto; }
-        .core-panel .message-images img { height: auto; max-height: 360px; }
+        .core-panel .message-images img { height: auto; max-height: 256px; }
         .core-panel .task-prompt > p { margin: 0; }
         .core-panel .task-prompt > p + .message-images { margin-top: 12px; }
         .core-panel .image-unavailable { display: grid; place-items: center; height: 100%; color: var(--muted); font-size: 12px; }
@@ -509,7 +509,7 @@ The page is rebuilt on every load by replaying all recorded run_js scripts, in o
             }
             if (removable) {
                 const button = document.createElement('button'); button.type = 'button'; button.className = 'image-remove'; button.setAttribute('aria-label', `Remove ${image.name}`); drawIcon(button, 'X');
-                button.onclick = () => { draftImages = draftImages.filter(value => value.id !== image.id); renderDraftImages(); pruneImages().catch(() => {}); };
+                button.onclick = event => { event.stopPropagation(); draftImages = draftImages.filter(value => value.id !== image.id); imageStatus(); renderDraftImages(); pruneImages().catch(() => {}); };
                 item.append(button);
             }
             return item;
@@ -527,13 +527,13 @@ The page is rebuilt on every load by replaying all recorded run_js scripts, in o
 
         async function addImages(files) {
             if (busy || controller || importing || exporting || preparingImages) return;
-            const selected = [...files]; if (!selected.length) return;
+            const selected = [...files]; $('image-files').value = ''; if (!selected.length) return;
             if (selected.length + draftImages.length > MAX_IMAGES) return imageStatus(`Attach up to ${MAX_IMAGES} images per message.`);
             preparingImages = true; setRunning(false); imageStatus();
             const prepared = [];
             try { for (const file of selected) prepared.push(await prepareImage(file)); draftImages.push(...prepared); }
             catch (e) { for (const image of prepared) { URL.revokeObjectURL(imageCache.get(image.id).url); imageCache.delete(image.id); } imageStatus(e.message || 'Could not read this image.'); }
-            finally { preparingImages = false; $('image-files').value = ''; renderDraftImages(); }
+            finally { preparingImages = false; renderDraftImages(); }
         }
 
         async function inputMessage({ role, content, images = [] }, required = false) {
