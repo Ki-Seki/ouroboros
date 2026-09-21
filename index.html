@@ -129,7 +129,7 @@
         .core-panel #user-prompt::placeholder { color: #858f9e; }
         .core-panel .core-meta { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 4px 12px; margin-top: 9px; color: var(--muted); font-size: 11px; }
         .core-panel #model-btn { max-width: 190px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-        @media (max-width: 599px) { .desktop-window { font-size: 15px; } .desktop-window .ui-body, .core-panel #activity-log { padding: 20px; } .desktop-window .ui-label, .desktop-window .ui-caption { font-size: 13px; } }
+        @media (max-width: 599px) { #window-layer > .desktop-window { font-size: 15px; } .desktop-window .ui-body, .core-panel #activity-log { padding: 20px; } .desktop-window .ui-label, .desktop-window .ui-caption { font-size: 13px; } }
         @media (pointer: coarse) { .desktop-window button, .desktop-window summary, .desktop-window .ui-button, .desktop-window .ui-segmented > button { min-height: 44px; } #window-layer .window-controls button, .desktop-window .ui-icon-button { width: 44px; height: 44px; } .desktop-window .ui-field, .core-panel #user-prompt { font-size: 16px; } }
     </style>
 </head>
@@ -171,7 +171,7 @@
                 <circle cx="1410" cy="1050" r="590" fill="url(#arc-rim)"/>
             </symbol>
         </defs>
-        <use id="wallpaper-art" href="#wallpaper-flow" width="1600" height="1000"/>
+        <use id="wallpaper-art" width="1600" height="1000"/>
     </svg>
 
     <main id="desktop" aria-label="Application map" tabindex="0" aria-busy="true" inert><div id="window-layer">
