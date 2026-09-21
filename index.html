@@ -59,7 +59,7 @@
         .desktop-window button:disabled { opacity: .45; cursor: default; }
         .desktop-window :is(button, summary, input, textarea, select) { border-radius: 10px; box-shadow: none; }
         .desktop-window :is(button, summary, input, textarea, select):focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
-        .desktop-window .ui-body { flex: 1; min-height: 0; overflow: auto; padding: 24px; scrollbar-width: thin; scrollbar-color: #d4d9e1 transparent; }
+        .desktop-window .ui-body { flex: 1; min-width: 0; min-height: 0; overflow: auto; padding: 24px; scrollbar-width: thin; scrollbar-color: #d4d9e1 transparent; }
         .desktop-window .ui-label { display: grid; gap: 8px; color: var(--muted); font-size: 12px; font-weight: 500; }
         .desktop-window .ui-field { width: 100%; min-width: 0; min-height: 38px; padding: 9px 12px; color: var(--ink); background: var(--surface); border: 1px solid var(--line); font: inherit; font-size: 14px; transition: background .15s, border-color .15s; }
         .desktop-window .ui-field::placeholder { color: #8b94a2; }
@@ -91,6 +91,16 @@
         .core-panel .settings-section + .settings-section { padding-top: 24px; border-top: 1px solid var(--line); }
         .core-panel .settings-section h3 { font-size: 12px; font-weight: 600; color: var(--ink); }
         .core-panel .settings-field { grid-template-columns: 64px minmax(0, 1fr); align-items: center; gap: 12px; }
+        .core-panel .wallpaper-options { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; border: 0; padding: 0; }
+        .core-panel .wallpaper-options legend { margin-bottom: 12px; color: var(--muted); font-size: 12px; }
+        .core-panel .wallpaper-choice { display: grid; gap: 8px; position: relative; text-align: center; cursor: pointer; }
+        .core-panel .wallpaper-choice input { position: absolute; width: 1px; height: 1px; opacity: 0; }
+        .core-panel .wallpaper-preview { display: block; height: 48px; position: relative; border-radius: 10px; background: #f2f2f7; box-shadow: inset 0 0 0 1px #0000000a; }
+        .core-panel .wallpaper-preview svg { display: block; width: 100%; height: 100%; border-radius: inherit; }
+        .core-panel .wallpaper-choice input:checked + .wallpaper-preview { outline: 2px solid var(--accent); outline-offset: 3px; }
+        .core-panel .wallpaper-choice input:checked + .wallpaper-preview::after { content: ''; position: absolute; right: 8px; bottom: 8px; width: 7px; height: 12px; border: solid #1d1d1f; border-width: 0 2px 2px 0; transform: rotate(45deg); }
+        .core-panel .wallpaper-choice input:focus-visible + .wallpaper-preview { outline: 3px solid var(--accent); outline-offset: 3px; }
+        .core-panel .wallpaper-choice > span:last-child { color: var(--muted); font-size: 12px; }
         .core-panel .usage-table { width: 100%; border-collapse: collapse; font-size: 12px; font-variant-numeric: tabular-nums; }
         .core-panel .usage-table :is(th, td) { padding: 4px 0; text-align: right; font-weight: 400; }
         .core-panel .usage-table th { color: var(--muted); }
@@ -127,13 +137,41 @@
 
     <svg id="desktop-wallpaper" viewBox="0 0 1600 1000" preserveAspectRatio="xMidYMid slice" aria-hidden="true" focusable="false">
         <defs>
-            <radialGradient id="wallpaper-sky" cx="24%" cy="12%" r="100%"><stop stop-color="#f5f7fc"/><stop offset=".55" stop-color="#d8e2f6"/><stop offset="1" stop-color="#c5c9ec"/></radialGradient>
-            <linearGradient id="wallpaper-blue" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#c3d7fa"/><stop offset=".48" stop-color="#83a8e6"/><stop offset="1" stop-color="#b5b9e5"/></linearGradient>
-            <linearGradient id="wallpaper-mint" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#e2edf5"/><stop offset=".6" stop-color="#a2cecc"/><stop offset="1" stop-color="#d4e9e3"/></linearGradient>
+            <radialGradient id="flow-sky" cx="24%" cy="12%" r="100%"><stop stop-color="#f5f7fc"/><stop offset=".55" stop-color="#d8e2f6"/><stop offset="1" stop-color="#c5c9ec"/></radialGradient>
+            <linearGradient id="flow-blue" x2="1" y2="1"><stop stop-color="#c3d7fa"/><stop offset=".48" stop-color="#83a8e6"/><stop offset="1" stop-color="#b5b9e5"/></linearGradient>
+            <linearGradient id="flow-mint" x2="1" y2="1"><stop stop-color="#e2edf5"/><stop offset=".6" stop-color="#a2cecc"/><stop offset="1" stop-color="#d4e9e3"/></linearGradient>
+            <symbol id="wallpaper-flow" viewBox="0 0 1600 1000">
+                <rect width="1600" height="1000" fill="url(#flow-sky)"/>
+                <path d="M-160 920C130 1030 410 480 710 420S1340 560 1760-80V1120H-160Z" fill="url(#flow-blue)"/>
+                <path d="M-140 1050C300 1170 450 660 760 640S1190 790 1750 440V1120H-140Z" fill="url(#flow-mint)"/>
+            </symbol>
+            <radialGradient id="glow-teal"><stop stop-color="#76b9b4" stop-opacity=".85"/><stop offset="1" stop-color="#b9dfd5" stop-opacity="0"/></radialGradient>
+            <radialGradient id="glow-gold"><stop stop-color="#e7cca1" stop-opacity=".85"/><stop offset="1" stop-color="#f2e4cb" stop-opacity="0"/></radialGradient>
+            <radialGradient id="glow-blue"><stop stop-color="#9cb8e2" stop-opacity=".8"/><stop offset="1" stop-color="#d1dff3" stop-opacity="0"/></radialGradient>
+            <symbol id="wallpaper-glow" viewBox="0 0 1600 1000">
+                <rect width="1600" height="1000" fill="#eef5f2"/>
+                <ellipse cx="390" cy="600" rx="800" ry="630" fill="url(#glow-teal)"/>
+                <ellipse cx="1320" cy="90" rx="850" ry="710" fill="url(#glow-gold)"/>
+                <ellipse cx="1370" cy="1020" rx="750" ry="570" fill="url(#glow-blue)"/>
+            </symbol>
+            <linearGradient id="fold-base" x2="1" y2="1"><stop stop-color="#f7f3fb"/><stop offset="1" stop-color="#cfcee7"/></linearGradient>
+            <linearGradient id="fold-violet" x2="1" y2="0"><stop stop-color="#dcd8f0"/><stop offset=".6" stop-color="#a99bce"/><stop offset="1" stop-color="#e8e5f5"/></linearGradient>
+            <linearGradient id="fold-light" x2="1" y2="1"><stop stop-color="#faf8ff"/><stop offset="1" stop-color="#b7c5e3"/></linearGradient>
+            <symbol id="wallpaper-fold" viewBox="0 0 1600 1000">
+                <rect width="1600" height="1000" fill="url(#fold-base)"/>
+                <path d="M180-100H1190C750 160 1060 630 1710 820V1110H720C1110 680 430 430 180-100Z" fill="url(#fold-violet)"/>
+                <path d="M-100 1080V520C430 890 760 180 1060-100H1330C970 230 1040 950 480 1080Z" fill="url(#fold-light)"/>
+            </symbol>
+            <linearGradient id="arc-base" x2="1" y2="1"><stop stop-color="#f7f8fb"/><stop offset="1" stop-color="#dce4ee"/></linearGradient>
+            <linearGradient id="arc-rim" x2="1" y2="1"><stop stop-color="#c3cedf"/><stop offset=".5" stop-color="#edf2f7"/><stop offset="1" stop-color="#afbed2"/></linearGradient>
+            <symbol id="wallpaper-arc" viewBox="0 0 1600 1000">
+                <rect width="1600" height="1000" fill="url(#arc-base)"/>
+                <circle cx="1410" cy="1050" r="1140" fill="url(#arc-rim)"/>
+                <circle cx="1410" cy="1050" r="870" fill="url(#arc-base)"/>
+                <circle cx="1410" cy="1050" r="590" fill="url(#arc-rim)"/>
+            </symbol>
         </defs>
-        <rect width="1600" height="1000" fill="url(#wallpaper-sky)"/>
-        <path d="M-160 920C130 1030 410 480 710 420S1340 560 1760-80V1120H-160Z" fill="url(#wallpaper-blue)"/>
-        <path d="M-140 1050C300 1170 450 660 760 640S1190 790 1750 440V1120H-140Z" fill="url(#wallpaper-mint)"/>
+        <use id="wallpaper-art" href="#wallpaper-flow" width="1600" height="1000"/>
     </svg>
 
     <main id="desktop" aria-label="Application map" tabindex="0" aria-busy="true" inert><div id="window-layer">
@@ -162,7 +200,7 @@
         </div>
     </div>
 
-    <section id="ouroboros-settings" class="draggable resizable core-panel" data-window-title="Settings" data-window-icon="Settings" data-width="480" data-height="640" hidden>
+    <section id="ouroboros-settings" class="draggable resizable core-panel" data-window-title="Settings" data-window-icon="Settings" data-width="480" data-height="700" hidden>
         <div class="window-header"><h2>Settings</h2></div>
         <div id="settings-panel" class="core-settings ui-body">
             <section class="settings-section" aria-labelledby="connection-title">
@@ -170,10 +208,17 @@
                 <label class="ui-label settings-field">API key<input type="password" id="api-key" placeholder="sk-…" class="ui-field" autocomplete="off"></label>
                 <label class="ui-label settings-field">Base URL<input type="text" id="api-base" value="https://api.openai.com/v1" class="ui-field" spellcheck="false"></label>
                 <label class="ui-label settings-field">Model<input type="text" id="model" value="gpt-5.6-sol" class="ui-field" spellcheck="false"></label>
-                <div class="flex justify-end"><button id="save-btn" type="button" class="ui-button">Save settings</button></div>
+                <div class="flex justify-end"><button id="save-btn" type="button" class="ui-button">Save connection</button></div>
             </section>
             <section class="settings-section" aria-labelledby="appearance-title">
                 <h3 id="appearance-title">Appearance</h3>
+                <fieldset class="wallpaper-options">
+                    <legend>Background</legend>
+                    <label class="wallpaper-choice"><input type="radio" name="wallpaper" value="flow"><span class="wallpaper-preview"><svg viewBox="0 0 1600 1000" preserveAspectRatio="xMidYMid slice" aria-hidden="true"><use href="#wallpaper-flow" width="1600" height="1000"/></svg></span><span>Flow</span></label>
+                    <label class="wallpaper-choice"><input type="radio" name="wallpaper" value="glow"><span class="wallpaper-preview"><svg viewBox="0 0 1600 1000" preserveAspectRatio="xMidYMid slice" aria-hidden="true"><use href="#wallpaper-glow" width="1600" height="1000"/></svg></span><span>Glow</span></label>
+                    <label class="wallpaper-choice"><input type="radio" name="wallpaper" value="fold"><span class="wallpaper-preview"><svg viewBox="0 0 1600 1000" preserveAspectRatio="xMidYMid slice" aria-hidden="true"><use href="#wallpaper-fold" width="1600" height="1000"/></svg></span><span>Fold</span></label>
+                    <label class="wallpaper-choice"><input type="radio" name="wallpaper" value="arc"><span class="wallpaper-preview"><svg viewBox="0 0 1600 1000" preserveAspectRatio="xMidYMid slice" aria-hidden="true"><use href="#wallpaper-arc" width="1600" height="1000"/></svg></span><span>Arc</span></label>
+                </fieldset>
                 <label class="flex items-center justify-between gap-4 min-h-11 cursor-pointer" for="disable-animations">
                     <span>Disable animations</span><input id="disable-animations" type="checkbox" class="w-4 h-4 shrink-0 accent-[var(--tile)]">
                 </label>
@@ -200,7 +245,6 @@
                     <button id="rollback-btn" type="button" class="ui-button is-secondary shrink-0">Restore</button>
                 </div>
                 <div class="flex flex-wrap gap-2">
-                    <button id="arrange-settings-btn" type="button" class="ui-button is-secondary">Show all apps</button>
                     <button id="export-btn" type="button" class="ui-button is-secondary">Export HTML</button>
                     <button id="import-btn" type="button" class="ui-button is-secondary">Import HTML</button>
                     <button id="import-backup-btn" type="button" class="ui-button is-secondary" hidden>Restore backup</button>
@@ -298,8 +342,10 @@ The page is rebuilt on every load by replaying all recorded run_js scripts, in o
             apiBase: storedSettings?.apiBase || $('api-base').defaultValue,
             model: storedSettings?.model || $('model').defaultValue,
             disableAnimations: verification ? true : storedSettings?.disableAnimations ?? false,
+            wallpaper: ['flow', 'glow', 'fold', 'arc'].includes(storedSettings?.wallpaper) ? storedSettings.wallpaper : 'flow',
             usage: storedSettings?.usage ?? { input: 0, output: 0, responses: 0, lastTask: null },
         };
+        $('wallpaper-art').setAttribute('href', '#wallpaper-' + settings.wallpaper);
         const saved = load(CONTENT_KEY) ?? embedded;
         const state = {
             history: [...saved.history],
@@ -682,8 +728,7 @@ The page is rebuilt on every load by replaying all recorded run_js scripts, in o
                 catch (e) { failed++; console.error('Replay failed:', e, index); noteError(`Replay of saved script ${index} failed: ${e.message}`); }
                 syncWindows();
             }
-            const n = state.mutations.filter(m => m.code && !m.test).length;
-            if (n) log('system', `Replayed ${n} mutation(s)${failed ? `, ${failed} failed (see console)` : ''}.`);
+            if (failed) log('error', 'Some saved changes could not be restored. You can restore an earlier version in Settings.');
             return failed;
         }
 
@@ -881,7 +926,7 @@ The page is rebuilt on every load by replaying all recorded run_js scripts, in o
                 const y = mix(mix(mapY, slot.y, spread), (height - size.h) / 2 + scrollY, amount);
                 const focused = selected && focus > .95 && !switching;
                 const interactive = !switching && (focused || (expanded && focus === 0));
-                Object.assign(win.el.style, { width: `${w / scale}px`, height: `${h / scale}px`, transform: `translate(${x}px, ${y}px) scale(${scale})`, zIndex: selected ? '3' : '1', filter: selected || animationsDisabled() || !focus ? 'none' : `blur(${focus * 7 / scale}px)`, opacity: selected ? '1' : String(1 - focus * .75) });
+                Object.assign(win.el.style, { width: `${w / scale}px`, height: `${h / scale}px`, transform: `translate(${x}px, ${y}px) scale(${scale})`, zIndex: selected ? '3' : '1', filter: selected || animationsDisabled() || !focus ? 'none' : `blur(${focus * 7 / scale}px)`, opacity: selected ? '1' : String(1 - focus * .87) });
                 win.el.style.setProperty('--detail', detail);
                 win.el.style.setProperty('--radius', `${mix(TILE_SIZE / 2, 22, detail)}px`);
                 win.el.style.setProperty('--label-size', `${Math.max(18, 12 / camera.zoom)}px`);
@@ -890,7 +935,7 @@ The page is rebuilt on every load by replaying all recorded run_js scripts, in o
                 win.el.classList.toggle('is-focused', focused);
                 win.el.inert = focus > .15 && !selected;
                 win.face.hidden = spread === 1 || focused;
-                win.face.querySelector('.tile-title').hidden = camera.zoom < .38;
+                win.face.querySelector('.tile-title').hidden = TILE_SIZE * camera.zoom < 96;
                 for (const child of win.el.children) if (child !== win.face) child.inert = !interactive;
                 const control = win.el.querySelector('.window-controls button'), action = expanded && focus === 0 ? 'focus' : 'home';
                 if (control.dataset.windowAction !== action) {
@@ -1123,7 +1168,6 @@ The page is rebuilt on every load by replaying all recorded run_js scripts, in o
                 if (!atHome) returnHome();
                 else switchView();
             };
-            $('arrange-settings-btn').onclick = () => returnHome();
             addEventListener('keydown', e => {
                 if (e.defaultPrevented || e.isComposing || e.ctrlKey || e.metaKey || e.altKey) return;
                 if (e.key === 'Escape') { e.preventDefault(); returnHome(); }
@@ -1151,6 +1195,7 @@ The page is rebuilt on every load by replaying all recorded run_js scripts, in o
                 entry.innerHTML = `<p class="task-prompt">${esc(text)}</p><div class="task-result"></div><details class="task-steps" hidden><summary>Steps</summary><div class="step-list"></div></details>`;
                 els.log.append(entry);
             } else {
+                if (kind === 'error') $('empty-state')?.remove();
                 const target = $(`task-${task}`)?.querySelector('.task-result') || els.log;
                 const className = kind === 'error' ? 'is-error' : kind === 'system' ? 'core-note' : '';
                 target.insertAdjacentHTML('beforeend', `<p class="${className}">${esc(text)}</p>`);
@@ -1216,7 +1261,7 @@ The page is rebuilt on every load by replaying all recorded run_js scripts, in o
             els.btn.textContent = on ? 'Stop' : 'Send ↑';
             els.btn.classList.toggle('is-running', on);
             els.btn.disabled = busy || importing;
-            for (const id of ['export-btn', 'import-btn', 'import-backup-btn', 'reset-btn', 'save-btn', 'arrange-settings-btn']) $(id).disabled = busy || on || importing;
+            for (const id of ['export-btn', 'import-btn', 'import-backup-btn', 'reset-btn', 'save-btn']) $(id).disabled = busy || on || importing;
             for (const button of document.querySelectorAll('.window-controls button, .tile-face')) button.disabled = busy || importing;
             const last = $(`task-${state.history.at(-1)?.task}`);
             els.undo.hidden = on || busy || importing || !last || !Number.isInteger(state.history.findLast(h => h.role === 'user')?.before);
@@ -1247,6 +1292,15 @@ The page is rebuilt on every load by replaying all recorded run_js scripts, in o
         function bindSettings() {
             const fields = { apiKey: 'api-key', apiBase: 'api-base', model: 'model' };
             for (const [key, id] of Object.entries(fields)) $(id).value = settings[key];
+            for (const option of document.querySelectorAll('input[name="wallpaper"]')) {
+                option.checked = option.value === settings.wallpaper;
+                option.onchange = () => {
+                    settings.wallpaper = option.value;
+                    $('wallpaper-art').setAttribute('href', '#wallpaper-' + option.value);
+                    try { saveSettings(); }
+                    catch (e) { log('error', `Could not save background: ${e.message}`); }
+                };
+            }
             const motion = $('disable-animations');
             motion.checked = settings.disableAnimations;
             motion.onchange = () => {
