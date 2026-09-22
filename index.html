@@ -1081,6 +1081,7 @@ The page is rebuilt on every load by replaying all recorded run_js scripts, in o
         const smooth = t => t * t * (3 - 2 * t);
         const focusProgress = () => windows.has(camera.focus) ? smooth(clamp((camera.zoom - FOCUS_START) / (FOCUS_END - FOCUS_START), 0, 1)) : 0;
         let windowSerial = 0, nextTone = 0, animation = 0, expanded = false, atHome = false;
+        let revealAnimations = [];
         let layoutCache = null, renderFrame = 0;
         const queueRender = () => { if (!renderFrame) renderFrame = requestAnimationFrame(renderMap); };
 
@@ -1133,6 +1134,8 @@ The page is rebuilt on every load by replaying all recorded run_js scripts, in o
         }
 
         function renderMap() {
+            for (const reveal of revealAnimations) reveal.cancel();
+            revealAnimations = [];
             cancelAnimationFrame(renderFrame); renderFrame = 0;
             document.documentElement.classList.toggle('no-animations', animationsDisabled());
             const spread = camera.expansion, switching = spread !== Number(expanded);
@@ -1662,6 +1665,8 @@ The page is rebuilt on every load by replaying all recorded run_js scripts, in o
             setRunning(false);
             desktop.removeAttribute('inert'); desktop.removeAttribute('aria-busy');
             document.body.classList.remove('restoring');
+            if (!animationsDisabled()) revealAnimations = [...windows.values()].map(({ face }) =>
+                face.animate([{ opacity: 0 }, { opacity: 1 }], { duration: 220, easing: 'ease-out' }));
             pruneImages().catch(() => {});
 
             let queued = false;
