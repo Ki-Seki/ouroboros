@@ -675,9 +675,8 @@ The page is rebuilt on every load by replaying all recorded run_js scripts, in o
 
         const fetchAsset = window.fetch.bind(window);   // apps may wrap window.fetch; dependencies load through the original
         // A verification copy inlines the page's external scripts: Tailwind as its compiled stylesheet, the libraries as fetched source. Only Lucide is required.
-        const externalScripts = [...document.scripts].map(script => script.getAttribute('src')).filter(Boolean);
-        const tailwindScript = externalScripts.find(src => src.includes('tailwindcss')), libraries = externalScripts.filter(src => src !== tailwindScript);
-        const scriptTag = src => `<script src="${src}"><` + '/script>';
+        const externalScripts = [...document.scripts].filter(script => script.hasAttribute('src')).map(script => ({ src: script.getAttribute('src'), tag: script.outerHTML }));
+        const tailwindScript = externalScripts.find(script => script.src.includes('tailwindcss')), libraries = externalScripts.filter(script => script !== tailwindScript);
         let libraryAssets;
         async function testApps({ app_ids, code, viewport }) {
             if (verification) throw new Error('Nested verification is not supported.');
@@ -696,7 +695,7 @@ The page is rebuilt on every load by replaying all recorded run_js scripts, in o
             let receive, abort;
             try {
                 if (upstream?.aborted) stop();
-                libraryAssets ??= Promise.all(libraries.map(async src => {
+                libraryAssets ??= Promise.all(libraries.map(async ({ src }) => {
                     try {
                         const response = await fetchAsset(src, { credentials: 'omit', signal: signal.signal });
                         if (!response.ok) throw new Error(`Could not load verification dependency: ${response.status}`);
@@ -717,8 +716,8 @@ The page is rebuilt on every load by replaying all recorded run_js scripts, in o
                 let html = pageWith(snapshot).replace('<html ', '<html data-verification ')
                     .replace('<head>', `<head><meta http-equiv="Content-Security-Policy" content="${policy}">`);
                 const css = [...document.querySelectorAll('style')].filter(el => tailwindStyle(el.textContent)).map(el => el.textContent).join('\n');
-                html = html.replace(scriptTag(tailwindScript), () => script(`const style=document.createElement('style');style.textContent=${json(css)};document.head.append(style);`));
-                libraries.forEach((src, i) => { html = html.replace(scriptTag(src), () => assets[i] ? script(assets[i]) : ''); });
+                html = html.replace(tailwindScript.tag, () => script(`const style=document.createElement('style');style.textContent=${json(css)};document.head.append(style);`));
+                libraries.forEach(({ tag }, i) => { html = html.replace(tag, () => assets[i] ? script(assets[i]) : ''); });
                 // The trusted wrapper keeps app code separate and restricts nested documents.
                 const wrapper = `const child=document.querySelector('iframe');addEventListener('message',e=>{if(e.source===child.contentWindow&&e.data?.nonce===${json(nonce)})parent.postMessage(e.data,'*');});child.getBoundingClientRect();child.srcdoc=${json(html)};`;
                 const frameHtml = `<!DOCTYPE html><html><head><meta http-equiv="Content-Security-Policy" content="${policy}"><style>body{margin:0}iframe{width:${width}px;height:${height}px;border:0;display:block}</style></head><body><iframe sandbox="allow-scripts allow-forms"></iframe>${script(wrapper)}</body></html>`;
@@ -1013,9 +1012,10 @@ The page is rebuilt on every load by replaying all recorded run_js scripts, in o
         }
 
         // Every canvas swap writes the next content in one go, so the current canvas survives a storage failure, then reloads to replay it from the pristine page.
-        async function restart(next, backup = importBackup) {
+        // backup becomes the import backup: omitted keeps the current one, null clears it. onWritten runs once the write has succeeded.
+        async function restart(next, backup = importBackup, onWritten = () => {}) {
             localStorage.setItem(CONTENT_KEY, JSON.stringify(backup ? { ...next, importBackup: backup } : next));
-            cancelSave();
+            cancelSave(); onWritten();
             busy = true; draftImages = [];
             if (imageDatabase) await pruneImages(next, backup).catch(() => {});
             location.reload();
@@ -1076,8 +1076,7 @@ The page is rebuilt on every load by replaying all recorded run_js scripts, in o
                 ? 'Reset to the exported snapshot? Everything done since the export is discarded; settings are kept.'
                 : 'Reset the page to its pristine state? Mutations and history are cleared; settings are kept.';
             if (!confirm(message + (importBackup ? ' The import backup will also be cleared.' : ''))) return;
-            activity.length = 0; saveActivity();
-            try { await restart({ history: embedded.history, mutations: embedded.mutations }, null); }
+            try { await restart({ history: embedded.history, mutations: embedded.mutations }, null, () => { activity.length = 0; saveActivity(); }); }
             catch (e) { log('error', `Could not reset canvas: ${e.message}`); }
         }
 
