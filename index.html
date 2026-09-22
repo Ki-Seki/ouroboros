@@ -1139,6 +1139,7 @@ The page is rebuilt on every load by replaying all recorded run_js scripts, in o
             layer.style.height = `${board?.height ?? height}px`;
             const labelSize = `${Math.max(18, 12 / camera.zoom)}px`, iconSize = `${Math.max(68, 28 / camera.zoom)}px`;
             for (const win of windows.values()) {
+                if (measuring === true || noAnimations) { win.bridge?.cancel(); win.bridge = null; }
                 const selected = win.el.id === camera.focus, amount = selected ? focus : 0;
                 const slot = board?.rects.get(win) ?? { x: 0, y: 0, w: TILE_SIZE, h: TILE_SIZE };
                 const size = win.size;
@@ -1188,18 +1189,41 @@ The page is rebuilt on every load by replaying all recorded run_js scripts, in o
             cancelAnimationFrame(animation);
             animation = 0;
             if (!cameraMotion) return;
-            const motion = cameraMotion; cameraMotion = null;
+            const motion = cameraMotion;
+            const positions = [];
+            try {
+                if (!animationsDisabled()) for (const win of windows.values()) {
+                    const style = getComputedStyle(document.documentElement, `::view-transition-group(${win.transitionName})`);
+                    const width = parseFloat(style.width), height = parseFloat(style.height);
+                    if (!(width > 0 && height > 0) || style.transform === 'none') continue;
+                    const matrix = new DOMMatrix(style.transform);
+                    positions.push({ win, x: matrix.e + width * matrix.a / 2, y: matrix.f + height * matrix.d / 2, width: width * matrix.a });
+                }
+            } catch { positions.length = 0; }
+            cameraMotion = null;
             motion.transition.skipTransition();
+            for (const animation of motion.animations) animation.cancel();
             document.documentElement.classList.remove('is-camera-transition'); desktop.classList.remove('is-camera-animating');
             renderMap();
             desktop.scrollLeft = motion.scrollX; desktop.scrollTop = motion.scrollY;
             renderMap();
+            // Add a short correction without overriding transforms from the next drag or pinch.
+            const bridges = [];
+            for (const { win } of positions) win.bridge?.cancel();
+            for (const { win, x, y, width } of positions) {
+                const rect = win.el.getBoundingClientRect(), scale = rect.width / parseFloat(win.el.style.width), ratio = width / rect.width;
+                if (scale > 0 && ratio > 0 && Number.isFinite(ratio)) bridges.push({ win, transform: `translate(${(x - rect.x - rect.width * ratio / 2) / scale}px, ${(y - rect.y - rect.height * ratio / 2) / scale}px) scale(${ratio})` });
+            }
+            for (const { win, transform } of bridges) win.bridge = win.el.animate([
+                { transform }, { transform: 'translate(0px, 0px) scale(1)' },
+            ], { duration: 120, easing: 'ease-out', composite: 'add' });
         }
 
         function finishCameraMotion(motion) {
             if (cameraMotion !== motion) return;
             cameraMotion = null; cancelAnimationFrame(animation); animation = 0;
             motion.transition.skipTransition();
+            for (const animation of motion.animations) animation.cancel();
             document.documentElement.classList.remove('is-camera-transition'); desktop.classList.remove('is-camera-animating');
             Object.assign(camera, motion.next); renderMap();
             if (focusProgress() > .95) windows.get(camera.focus).el.focus({ preventScroll: true });
@@ -1213,7 +1237,7 @@ The page is rebuilt on every load by replaying all recorded run_js scripts, in o
             // Snapshot transitions keep app content out of the per-frame layout path.
             if (document.startViewTransition) {
                 const boxes = () => new Map([...windows.values()].map(win => [win.transitionName, win.el.getBoundingClientRect()]));
-                const motion = { from: { ...camera }, next, done, transition: null, boxes: boxes(), scrollX: desktop.scrollLeft, scrollY: desktop.scrollTop };
+                const motion = { from: { ...camera }, next, done, transition: null, animations: [], boxes: boxes(), scrollX: desktop.scrollLeft, scrollY: desktop.scrollTop };
                 cameraMotion = motion;
                 document.documentElement.classList.add('is-camera-transition'); desktop.classList.add('is-camera-animating');
                 motion.transition = document.startViewTransition(() => {
@@ -1237,7 +1261,7 @@ The page is rebuilt on every load by replaying all recorded run_js scripts, in o
                             { transform: `translate(${to.x}px, ${to.y}px) scale(${to.width / width})` },
                         ], pseudoElement });
                     }
-                    for (const layer of layers) document.documentElement.animate(layer.frames, { duration: CAMERA_DURATION, easing: 'cubic-bezier(.333333, 0, .666667, 1)', pseudoElement: layer.pseudoElement });
+                    for (const layer of layers) motion.animations.push(document.documentElement.animate(layer.frames, { duration: CAMERA_DURATION, easing: 'cubic-bezier(.333333, 0, .666667, 1)', pseudoElement: layer.pseudoElement }));
                     const start = performance.now();
                     const frame = now => {
                         if (cameraMotion !== motion) return;
@@ -1309,6 +1333,7 @@ The page is rebuilt on every load by replaying all recorded run_js scripts, in o
         }
 
         function syncWindows() {
+            while (cameraMotion) finishCameraMotion(cameraMotion);
             let changed = false, renamed = false, added = null;
             for (const [id, win] of windows) {
                 if ((!win.el.isConnected || win.el.id !== id) && !$(id)?.matches('.draggable.resizable')) { windows.delete(id); changed = true; }
@@ -1442,7 +1467,7 @@ The page is rebuilt on every load by replaying all recorded run_js scripts, in o
                 if (expanded && atHome) { if (e.touches.length > 1 && e.cancelable) e.preventDefault(); return; }
                 if (e.touches.length < 2 && (!canExplore() || !desktop.contains(e.target))) return;
                 if (e.cancelable) e.preventDefault();
-                cancelCameraMotion();
+                if (e.touches.length > 1) cancelCameraMotion();
                 const points = touchPoints(e);
                 touch = { p: midpoint(points), distance: distance(points), traveled: 0, moved: e.touches.length > 1, target: e.target.closest('.tile-face') };
             }, { passive: false, capture: true });
@@ -1452,9 +1477,9 @@ The page is rebuilt on every load by replaying all recorded run_js scripts, in o
                 const points = touchPoints(e), p = midpoint(points), d = distance(points);
                 const dx = p.x - touch.p.x, dy = p.y - touch.p.y;
                 if (d && touch.distance) zoomAt(camera.zoom * d / touch.distance, touch.p.x, touch.p.y, true);
-                if (canExplore()) pan(dx, dy);
                 touch.traveled += Math.hypot(dx, dy);
                 touch.moved ||= touch.traveled > 4 || d > 0;
+                if (touch.moved && canExplore()) pan(dx, dy);
                 Object.assign(touch, { p, distance: d });
             }, { passive: false, capture: true });
             document.addEventListener('touchend', e => {
