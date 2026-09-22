@@ -18,7 +18,7 @@
         }
     </script>
     <style>
-        html, body { touch-action: pan-x pan-y; overscroll-behavior: none; }
+        html, body { touch-action: pan-x pan-y; overscroll-behavior: none; -webkit-tap-highlight-color: transparent; }
         .no-animations *, .no-animations *::before, .no-animations *::after { animation: none !important; transition: none !important; scroll-behavior: auto !important; }
         body { margin: 0; background: #f2f4f8; color: #1d1d1f; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; -webkit-font-smoothing: antialiased; }
         body.restoring > :not(#map-toolbar):not(#desktop-wallpaper) { visibility: hidden !important; opacity: 0 !important; }
@@ -50,6 +50,7 @@
         #window-layer .tile-face:focus-visible { outline: 3px solid var(--accent); outline-offset: -8px; }
         #window-layer .tile-icon { width: 68px; height: 68px; color: var(--accent); }
         .no-animations #window-layer .tile-face { backdrop-filter: none; background: var(--tint); }
+        @media (pointer: coarse) { #window-layer > .desktop-window { transition: none; } }
         .ui-icon { display: block; width: 20px; height: 20px; flex: none; }
         #window-layer .window-controls .ui-icon { min-width: 20px; min-height: 20px; aspect-ratio: 1; }
         #window-layer .tile-icon .ui-icon { width: 100%; height: 100%; stroke-width: 1.75; }
@@ -326,6 +327,8 @@
     <header id="map-toolbar">
         <button id="map-home" type="button" aria-label="Restoring workspace" title="Restoring workspace" disabled><span id="map-home-icon" aria-hidden="true"></span><span id="map-home-title">Restoring…</span></button>
     </header>
+    <!-- Host classes toggled at runtime, listed once so the Tailwind CDN compiles them up front instead of rebuilding its stylesheet the first time each appears mid-animation. -->
+    <span hidden aria-hidden="true" class="has-focus has-overlay is-expanded is-switching is-panning is-focused no-animations desktop-window is-dragging is-running is-error core-note core-task task-prompt task-result task-steps step-list tool-entry tool-status message-images"></span>
 
     <!-- EMBEDDED SYSTEM PROMPT (editable by users) -->
     <script type="text/plain" id="ouroboros-system_prompt">
@@ -737,7 +740,7 @@ The page is rebuilt on every load by replaying all recorded run_js scripts, in o
             try {
                 if (setupFailures) throw new Error(`App setup failed: ${runtimeErrors.join('; ')}`);
                 if (verification.app_ids.some(id => !windows.has(id))) throw new Error('A requested app was not recreated.');
-                expanded = true; atHome = true; moveCamera({ zoom: .78, expansion: 1 }, false);
+                expanded = true; atHome = true; moveCamera({ zoom: .78 * zoomScale(), expansion: 1 }, false);
                 desktop.removeAttribute('inert'); desktop.removeAttribute('aria-busy'); document.body.classList.remove('restoring');
                 result.phase = 'test';
                 result.result = clip(show(await new AsyncFunction('check', verification.code)(check)), 8000);
@@ -1091,14 +1094,17 @@ The page is rebuilt on every load by replaying all recorded run_js scripts, in o
         ];
         const desktop = $('desktop'), layer = $('window-layer'), toolbar = $('map-toolbar'), windows = new Map();
         const camera = { x: 0, y: 0, zoom: .7, expansion: 0, focus: null };
-        const reducedMotion = matchMedia('(prefers-reduced-motion: reduce)');
+        const reducedMotion = matchMedia('(prefers-reduced-motion: reduce)'), coarsePointer = matchMedia('(pointer: coarse)');
         const animationsDisabled = () => settings.disableAnimations || reducedMotion.matches;
         const clamp = (n, min, max) => Math.min(max, Math.max(min, n));
         const mix = (a, b, t) => a * (1 - t) + b * t;
         const smooth = t => t * t * (3 - 2 * t);
-        const focusProgressOf = cam => windows.has(cam.focus) ? smooth(clamp((cam.zoom - FOCUS_START) / (FOCUS_END - FOCUS_START), 0, 1)) : 0;
+        // Zoom thresholds scale with the room a focused app has, so on a phone a tile grows straight into its app instead of past the screen.
+        const zoomScale = () => layoutCache?.zoomScale ?? 1;
+        const focusStart = () => FOCUS_START * zoomScale(), focusEnd = () => FOCUS_END * zoomScale();
+        const focusProgressOf = cam => windows.has(cam.focus) ? smooth(clamp((cam.zoom - focusStart()) / (focusEnd() - focusStart()), 0, 1)) : 0;
         const focusProgress = () => focusProgressOf(camera);
-        const detailOf = cam => mix(smooth(clamp((cam.zoom - .82) / .32, 0, 1)), 1, cam.expansion);
+        const detailOf = cam => mix(smooth(clamp((cam.zoom - .82 * zoomScale()) / (.32 * zoomScale()), 0, 1)), 1, cam.expansion);
         let windowSerial = 0, nextTone = 0, animation = 0, expanded = false, atHome = false;
         let revealAnimations = [];
         let layoutCache = null, renderFrame = 0;
@@ -1155,8 +1161,11 @@ The page is rebuilt on every load by replaying all recorded run_js scripts, in o
         }
 
         function ensureLayout(width, height) {
-            if (layoutCache && layoutCache.width === width && layoutCache.viewportHeight === height) return;
+            // On touch devices a browser bar sliding in or out changes the height a little; keeping the layout avoids jumps mid-gesture.
+            const tolerance = coarsePointer.matches ? 160 : 0;
+            if (layoutCache && layoutCache.width === width && Math.abs(layoutCache.viewportHeight - height) <= tolerance) return;
             layoutCache = expandedLayout(width, height);
+            layoutCache.zoomScale = clamp((Math.min(width, height) - 24) / (TILE_SIZE * FOCUS_END), .4, 1);
             for (const win of windows.values()) win.size = appSize(win.el, width, height);
         }
 
@@ -1173,13 +1182,17 @@ The page is rebuilt on every load by replaying all recorded run_js scripts, in o
 
         // While a camera move resizes windows, their content keeps the layout of the size at which it is visible,
         // so each frame only moves and clips boxes instead of reflowing every app; pins release once the camera settles.
-        const frozen = new Map(), frozenWindows = new Set();
+        const frozen = new Map(), frozenWindows = new Set(), hiddenContent = new Set();
         let freezeTimer = 0;
         const holdFrozen = () => { clearTimeout(freezeTimer); freezeTimer = setTimeout(releaseContent, 200); };
+        // Android and Windows devices skip rendering app content while windows morph and fade it in once the camera settles;
+        // ?lite=1 or ?lite=0 in the URL forces the choice for testing.
+        const liteOverride = new URLSearchParams(location.search).get('lite');
+        const liteMotion = () => liteOverride !== null ? liteOverride !== '0' : /Android|Windows/i.test(navigator.userAgentData?.platform || navigator.userAgent);
 
-        function freezeContent(from, to) {
-            const width = desktop.clientWidth, height = desktop.clientHeight;
-            ensureLayout(width, height);
+        function freezeContent(from, to, hide = false) {
+            ensureLayout(desktop.clientWidth, desktop.clientHeight);
+            const { width, viewportHeight: height } = layoutCache;
             const view = cam => ({ width, height, board: cam.expansion || expanded ? layoutCache : null, scrollX: 0, scrollY: 0 });
             const pinTo = detailOf(to) >= detailOf(from) ? to : from, targets = [];
             for (const win of windows.values()) {
@@ -1190,17 +1203,28 @@ The page is rebuilt on every load by replaying all recorded run_js scripts, in o
                 Object.assign(win.el.style, { width: `${box.w}px`, height: `${box.h}px` });
                 targets.push(win);
             }
-            if (!targets.length) return;
-            // One layout at the pinned size for every changing window, then the children keep those boxes.
-            const sizes = targets.map(win => [win, [...win.el.children].filter(child => child !== win.face && getComputedStyle(child).display !== 'none').map(child => [child, child.offsetWidth, child.offsetHeight])]);
-            for (const [win, children] of sizes) {
-                frozenWindows.add(win);
-                for (const [child, w, h] of children) {
-                    if (!frozen.has(child)) frozen.set(child, ['width', 'height', 'flex'].map(name => [name, child.style.getPropertyValue(name), child.style.getPropertyPriority(name)]));
-                    child.style.setProperty('width', `${w}px`, 'important'); child.style.setProperty('height', `${h}px`, 'important'); child.style.setProperty('flex', 'none', 'important');
+            const content = win => [...win.el.children].filter(child => child !== win.face);
+            const remember = child => { if (!frozen.has(child)) frozen.set(child, ['width', 'height', 'flex', 'visibility'].map(name => [name, child.style.getPropertyValue(name), child.style.getPropertyPriority(name)])); };
+            if (targets.length) {
+                // One layout at the pinned size for every changing window, then the children keep those boxes.
+                const sizes = targets.map(win => [win, content(win).filter(child => getComputedStyle(child).display !== 'none').map(child => [child, child.offsetWidth, child.offsetHeight])]);
+                for (const [win, children] of sizes) {
+                    frozenWindows.add(win);
+                    for (const [child, w, h] of children) {
+                        remember(child);
+                        child.style.setProperty('width', `${w}px`, 'important'); child.style.setProperty('height', `${h}px`, 'important'); child.style.setProperty('flex', 'none', 'important');
+                    }
                 }
             }
-            holdFrozen();
+            // Lite devices show no app content at all while the camera is in motion, whether from a move or a gesture; the glass face stands in.
+            if (hide) for (const win of windows.values()) {
+                for (const child of content(win)) if (!hiddenContent.has(child)) { remember(child); child.style.setProperty('visibility', 'hidden', 'important'); hiddenContent.add(child); }
+                if (!win.placeholder) {
+                    win.placeholder = true; win.detail = null;
+                    if (+win.face.style.opacity < 1 && !animationsDisabled()) win.face.animate([{ opacity: 0 }, { opacity: 1 }], { duration: 120, easing: 'ease-out' });
+                }
+            }
+            if (targets.length || hide) holdFrozen();
         }
 
         function releaseContent() {
@@ -1210,17 +1234,31 @@ The page is rebuilt on every load by replaying all recorded run_js scripts, in o
                 if (value) child.style.setProperty(name, value, priority); else child.style.removeProperty(name);
             }
             frozen.clear(); frozenWindows.clear();
+            // Content that was skipped during the move fades in where it is now visible, while the glass placeholder fades out.
+            for (const child of hiddenContent) {
+                const opacity = child.isConnected ? getComputedStyle(child).opacity : '0';
+                if (+opacity > 0 && !animationsDisabled()) child.animate([{ opacity: 0 }, { opacity }], { duration: 160, easing: 'ease-out' });
+            }
+            hiddenContent.clear();
+            for (const win of windows.values()) if (win.placeholder) {
+                const settle = () => { if (win.placeholder && ![...win.el.children].some(child => hiddenContent.has(child))) { win.placeholder = false; win.detail = null; win.face.style.pointerEvents = ''; renderMap(); } };
+                if (animationsDisabled()) { settle(); continue; }
+                const shown = win.detail ?? 0;
+                win.face.style.pointerEvents = 'none';
+                win.el.animate([{ backgroundColor: 'rgb(255 255 255 / 0)' }, { backgroundColor: `rgb(255 255 255 / ${shown})` }], { duration: 160, easing: 'ease-out' });
+                win.face.animate([{ opacity: 1 }, { opacity: String(1 - shown) }], { duration: 160, easing: 'ease-out' }).finished.then(settle, settle);
+            }
         }
 
         function renderMap() {
             cancelAnimationFrame(renderFrame); renderFrame = 0;
-            const noAnimations = animationsDisabled();
+            const noAnimations = animationsDisabled(), lite = liteMotion();
             document.documentElement.classList.toggle('no-animations', noAnimations);
             const spread = camera.expansion, switching = spread !== Number(expanded);
             const detail = detailOf(camera);
             const focus = focusProgress();
-            const width = desktop.clientWidth, height = desktop.clientHeight;
-            ensureLayout(width, height);
+            ensureLayout(desktop.clientWidth, desktop.clientHeight);
+            const { width, viewportHeight: height } = layoutCache;
             const board = spread || expanded ? layoutCache : null;
             const previousScrollX = desktop.scrollLeft, previousScrollY = desktop.scrollTop;
             const view = { width, height, board, scrollX: spread ? previousScrollX : 0, scrollY: spread ? Math.min(previousScrollY, Math.max(0, board.height - height)) : 0 };
@@ -1233,25 +1271,29 @@ The page is rebuilt on every load by replaying all recorded run_js scripts, in o
             const labelSize = `${Math.max(18, 12 / camera.zoom)}px`, iconSize = `${Math.max(68, 28 / camera.zoom)}px`;
             for (const win of windows.values()) {
                 const selected = win.el.id === camera.focus, box = windowBox(win, camera, view);
+                // On touch screens the neighbours of a focused app stay glass tiles instead of becoming content panes around it; lite devices keep them pure glass.
+                const shown = (coarsePointer.matches || lite) && camera.focus && !spread && !selected ? (lite ? 0 : detail * (1 - smooth(clamp((detail - .3) / .5, 0, 1)))) : detail;
                 const focused = selected && focus > .95 && !switching;
                 const interactive = !switching && (focused || (expanded && focus === 0));
-                Object.assign(win.el.style, { width: `${box.w}px`, height: `${box.h}px`, transform: `translate(${box.x}px, ${box.y}px) scale(${box.scale})`, zIndex: selected ? '3' : '1', filter: selected || noAnimations || !focus ? 'none' : `blur(${focus * 7 / box.scale}px)`, opacity: selected ? '1' : String(1 - focus * .87) });
-                if (win.detail !== detail) {
+                Object.assign(win.el.style, { width: `${box.w}px`, height: `${box.h}px`, transform: `translate(${box.x}px, ${box.y}px) scale(${box.scale})`, zIndex: selected ? '3' : '1', filter: selected || noAnimations || coarsePointer.matches || lite || !focus ? 'none' : `blur(${focus * 7 / box.scale}px)`, opacity: selected ? '1' : String(1 - focus * (coarsePointer.matches ? 1 : .87)) });
+                // While lite mode hides a window's content, its glass face stands in for it over a transparent body.
+                const glass = win.placeholder ? 1 : 1 - shown;
+                if (win.detail !== shown || win.glass !== glass) {
                     // Presentation is written on the window, its tile face and its direct children; inherited variables would restyle every app node each frame.
-                    win.el.style.backgroundColor = `rgb(255 255 255 / ${detail})`;
-                    win.el.style.setProperty('border-radius', `${mix(TILE_SIZE / 2, 22, detail)}px`, 'important');
-                    win.face.style.opacity = String(1 - detail);
+                    win.el.style.backgroundColor = `rgb(255 255 255 / ${win.placeholder ? 0 : shown})`;
+                    win.el.style.setProperty('border-radius', `${mix(TILE_SIZE / 2, 22, shown)}px`, 'important');
+                    win.face.style.opacity = String(glass); win.glass = glass;
                 }
                 updateValue(win.label.style, 'fontSize', labelSize);
                 updateValue(win.faceIcon.style, 'width', iconSize); updateValue(win.faceIcon.style, 'height', iconSize);
                 const entering = focused && !win.el.classList.contains('is-focused');
                 win.el.classList.toggle('is-focused', focused);
                 updateValue(win.el, 'inert', focus > .15 && !selected);
-                updateValue(win.face, 'hidden', spread === 1 || focused);
+                updateValue(win.face, 'hidden', !win.placeholder && (spread === 1 || focused));
                 updateValue(win.label, 'hidden', TILE_SIZE * camera.zoom < 96);
-                if (win.interactive !== interactive || win.detail !== detail) {
-                    for (const child of win.el.children) if (child !== win.face) { updateValue(child, 'inert', !interactive); updateValue(child.style, 'opacity', String(detail)); }
-                    win.interactive = interactive; win.detail = detail;
+                if (win.interactive !== interactive || win.detail !== shown) {
+                    for (const child of win.el.children) if (child !== win.face) { updateValue(child, 'inert', !interactive); updateValue(child.style, 'opacity', String(shown)); }
+                    win.interactive = interactive; win.detail = shown;
                 }
                 const action = expanded && focus === 0 ? 'focus' : 'home';
                 if (win.control.dataset.windowAction !== action) {
@@ -1273,7 +1315,7 @@ The page is rebuilt on every load by replaying all recorded run_js scripts, in o
             settleReveal();
             if (!animate || animationsDisabled()) { releaseContent(); Object.assign(camera, next); renderMap(); done(); return; }
             const from = { ...camera }, start = performance.now();
-            freezeContent(from, { ...camera, ...next });
+            freezeContent(from, { ...camera, ...next }, liteMotion());
             const frame = now => {
                 const t = animationsDisabled() ? 1 : clamp((now - start) / CAMERA_DURATION, 0, 1), ease = smooth(t);
                 for (const key of ['x', 'y', 'zoom', 'expansion']) camera[key] = mix(from[key], next[key] ?? from[key], ease);
@@ -1287,50 +1329,54 @@ The page is rebuilt on every load by replaying all recorded run_js scripts, in o
         function overview(animate = true) {
             if (!windows.size) return;
             expanded = false; atHome = true;
-            const tiles = [...windows.values()];
+            ensureLayout(desktop.clientWidth, desktop.clientHeight);
+            const { width, viewportHeight: height } = layoutCache, tiles = [...windows.values()];
             const left = Math.min(...tiles.map(w => w.x)) - TILE_SIZE / 2, right = Math.max(...tiles.map(w => w.x)) + TILE_SIZE / 2;
             const top = Math.min(...tiles.map(w => w.y)) - TILE_SIZE / 2, bottom = Math.max(...tiles.map(w => w.y)) + TILE_SIZE / 2;
-            moveCamera({ x: (left + right) / 2, y: (top + bottom) / 2, expansion: 0, zoom: clamp(Math.min((desktop.clientWidth - 56) / (right - left), (desktop.clientHeight - toolbar.offsetHeight * 2 - 56) / (bottom - top)), .12, .78) }, animate);
+            moveCamera({ x: (left + right) / 2, y: (top + bottom) / 2, expansion: 0, zoom: clamp(Math.min((width - 56) / (right - left), (height - toolbar.offsetHeight * 2 - 56) / (bottom - top)), .12 * zoomScale(), .78 * zoomScale()) }, animate, () => { if (atHome && !expanded) camera.focus = null; });
         }
 
         function focusApp(id, animate = true) {
             const win = windows.get(id);
             if (!win) return;
             atHome = false;
-            if (camera.zoom > FOCUS_START && camera.focus !== id) {
-                moveCamera({ zoom: FOCUS_START }, animate, () => focusApp(id, animate));
+            ensureLayout(desktop.clientWidth, desktop.clientHeight);
+            if (camera.zoom > focusStart() && camera.focus !== id) {
+                moveCamera({ zoom: focusStart() }, animate, () => focusApp(id, animate));
                 return;
             }
             camera.focus = id;
-            moveCamera({ x: win.x, y: win.y, zoom: FOCUS_END, expansion: Number(expanded) }, animate);
+            moveCamera({ x: win.x, y: win.y, zoom: focusEnd(), expansion: Number(expanded) }, animate);
         }
 
         function zoomAt(zoom, x = desktop.clientWidth / 2, y = desktop.clientHeight / 2, defer = false) {
             if ((expanded && atHome) || camera.expansion !== Number(expanded)) return;
             atHome = false;
             cancelAnimationFrame(animation); settleReveal();
+            ensureLayout(desktop.clientWidth, desktop.clientHeight);
             const before = { ...camera };
-            const next = clamp(zoom, .12, FOCUS_END), dx = x - desktop.clientWidth / 2, dy = y - desktop.clientHeight / 2;
+            const next = clamp(zoom, .12 * zoomScale(), focusEnd()), dx = x - desktop.clientWidth / 2, dy = y - desktop.clientHeight / 2;
             const world = { x: camera.x + dx / camera.zoom, y: camera.y + dy / camera.zoom };
-            if (camera.zoom < FOCUS_START && next >= FOCUS_START) {
+            if (camera.zoom < focusStart() && next >= focusStart()) {
                 camera.focus = [...windows.values()].sort((a, b) => Math.hypot(a.x - world.x, a.y - world.y) - Math.hypot(b.x - world.x, b.y - world.y))[0]?.el.id;
             }
             camera.x = world.x - dx / next; camera.y = world.y - dy / next; camera.zoom = next;
-            if (expanded && next <= FOCUS_START) atHome = true;
-            if (camera.focus && (focusProgress() || focusProgressOf(before))) freezeContent(before, { ...camera, zoom: FOCUS_END });
+            if (expanded && next <= focusStart()) atHome = true;
+            const focusing = camera.focus && (focusProgress() || focusProgressOf(before));
+            if (focusing || liteMotion()) freezeContent(before, focusing ? { ...camera, zoom: focusEnd() } : camera, liteMotion());
             if (defer) queueRender(); else renderMap();
         }
 
         function returnHome(animate = true) {
             if (!expanded) return overview(animate);
             atHome = true;
-            moveCamera({ zoom: .78 }, animate);
+            moveCamera({ zoom: .78 * zoomScale() }, animate);
         }
 
         function switchView() {
             if (expanded) return overview();
             expanded = true;
-            moveCamera({ expansion: 1, zoom: .78 });
+            moveCamera({ expansion: 1, zoom: .78 * zoomScale() });
         }
 
         function syncWindows() {
@@ -1364,7 +1410,7 @@ The page is rebuilt on every load by replaying all recorded run_js scripts, in o
                     win.control = header.querySelector('.window-controls button'); drawIcon(win.control, 'Minimize2');
                 }
                 win.label = win.face.querySelector('.tile-title'); win.faceIcon = win.face.querySelector('.tile-icon');
-                win.interactive = win.detail = null; // New or replaced children receive the current presentation on the next render.
+                win.interactive = win.detail = win.glass = null; // New or replaced children receive the current presentation on the next render.
                 const title = el.dataset.windowTitle || header.querySelector('h1,h2,h3')?.textContent.trim() || el.id;
                 if (win.title !== title) {
                     renamed = true;
@@ -1423,7 +1469,7 @@ The page is rebuilt on every load by replaying all recorded run_js scripts, in o
             syncWindows();
             let drag = null, touch = null, suppressClick = false;
             const point = e => { const box = desktop.getBoundingClientRect(); return { x: e.clientX - box.left, y: e.clientY - box.top }; };
-            const pan = (dx, dy) => { cancelAnimationFrame(animation); settleReveal(); atHome = false; camera.x -= dx / camera.zoom; camera.y -= dy / camera.zoom; queueRender(); };
+            const pan = (dx, dy) => { cancelAnimationFrame(animation); settleReveal(); atHome = false; camera.x -= dx / camera.zoom; camera.y -= dy / camera.zoom; if (liteMotion() && detailOf(camera) > 0) freezeContent(camera, camera, true); queueRender(); };
             const canExplore = () => !expanded && camera.expansion === 0 && focusProgress() <= .95;
             desktop.addEventListener('pointerdown', e => {
                 if (e.pointerType === 'touch' || e.button !== 0 || !canExplore()) return;
@@ -1462,31 +1508,32 @@ The page is rebuilt on every load by replaying all recorded run_js scripts, in o
             const touchPoints = e => [...e.touches].map(point);
             const midpoint = points => points.length > 1 ? { x: (points[0].x + points[1].x) / 2, y: (points[0].y + points[1].y) / 2 } : points[0];
             const distance = points => points.length > 1 ? Math.hypot(points[0].x - points[1].x, points[0].y - points[1].y) : 0;
-            // A pinch can straddle the canvas and toolbar; own it for the whole page.
+            // A pinch can straddle the canvas and toolbar; own it for the whole page. The listeners stay passive: touch-action already
+            // reserves the map for these gestures, so native scrolling in apps and the expanded view never waits for script.
             document.addEventListener('touchstart', e => {
-                if (camera.expansion !== Number(expanded)) { if (e.touches.length > 1 && e.cancelable) e.preventDefault(); return; }
-                if (expanded && atHome) { if (e.touches.length > 1 && e.cancelable) e.preventDefault(); return; }
+                if (camera.expansion !== Number(expanded) || (expanded && atHome)) return;
                 if (e.touches.length < 2 && (!canExplore() || !desktop.contains(e.target))) return;
-                if (e.cancelable) e.preventDefault();
-                cancelAnimationFrame(animation);
+                if (e.touches.length > 1) cancelAnimationFrame(animation);
                 const points = touchPoints(e);
                 touch = { p: midpoint(points), distance: distance(points), traveled: 0, moved: e.touches.length > 1, target: e.target.closest('.tile-face') };
-            }, { passive: false, capture: true });
+            }, { passive: true, capture: true });
             document.addEventListener('touchmove', e => {
                 if (!touch) return;
-                if (e.cancelable) e.preventDefault();
                 const points = touchPoints(e), p = midpoint(points), d = distance(points);
                 const dx = p.x - touch.p.x, dy = p.y - touch.p.y;
                 if (d && touch.distance) zoomAt(camera.zoom * d / touch.distance, touch.p.x, touch.p.y, true);
-                if (canExplore()) pan(dx, dy);
                 touch.traveled += Math.hypot(dx, dy);
                 touch.moved ||= touch.traveled > 4 || d > 0;
+                if (touch.moved && canExplore()) pan(dx, dy);
                 Object.assign(touch, { p, distance: d });
-            }, { passive: false, capture: true });
+            }, { passive: true, capture: true });
             document.addEventListener('touchend', e => {
                 if (!touch) return;
                 if (e.touches.length) { const points = touchPoints(e); Object.assign(touch, { p: midpoint(points), distance: distance(points), moved: true }); return; }
-                if (!touch.moved && touch.target && !busy && !importing) focusApp(touch.target.closest('.desktop-window').id);
+                if (!touch.moved) {
+                    suppressClick = true; // The tap is handled here; the click the browser synthesises afterwards must not act again.
+                    if (touch.target && !busy && !importing) focusApp(touch.target.closest('.desktop-window').id);
+                }
                 touch = null;
             }, { capture: true });
             document.addEventListener('touchcancel', () => { touch = null; }, { capture: true });
@@ -1503,7 +1550,13 @@ The page is rebuilt on every load by replaying all recorded run_js scripts, in o
                     if (e.key === '0') returnHome();
                 }
             });
-            addEventListener('resize', () => !expanded && atHome ? overview(false) : renderMap());
+            addEventListener('resize', () => {
+                const focusedId = focusProgress() > .95 ? camera.focus : null;
+                ensureLayout(desktop.clientWidth, desktop.clientHeight);
+                if (!expanded && atHome) overview(false);
+                else if (focusedId && windows.has(focusedId)) focusApp(focusedId, false);
+                else renderMap();
+            });
             reducedMotion.addEventListener('change', renderMap);
         }
 
