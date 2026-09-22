@@ -398,8 +398,14 @@ The page is rebuilt on every load by replaying all recorded run_js scripts, in o
         // Each exported snapshot continues in its own local storage slot.
         // The pristine page is captured before any mutation is replayed; export = pristine + content.
         const pristine = '<!DOCTYPE html>\n' + document.documentElement.outerHTML.replace(/(<html\b[^>]*?) data-wallpaper="[^"]*"/, '$1');
+        // Exports and verification copies are the pristine page with the state block filled in; Tailwind's compiled stylesheet is left out and rebuilt on load.
+        const tailwindStyle = text => /tailwindcss|--tw-/.test(text);
+        const json = value => JSON.stringify(value).replace(/</g, '\\u003c');
+        const pageWith = data => pristine.replace(/<[s]tyle[^>]*>[\s\S]*?<\/[s]tyle>/g, block => tailwindStyle(block) ? '' : block)
+            .replace(/(<script type="application\/json" id="ouroboros-state">)[\s\S]*?(<\/script>)/, (_, open, close) => open + json(data) + close);
         const embedded = JSON.parse($('ouroboros-state').textContent);
         const verification = embedded.verification ?? null;
+        // A verification copy keeps settings, content and traces in memory, so the storage code below needs no special cases.
         if (verification) {
             for (const name of ['localStorage', 'sessionStorage']) {
                 const data = new Map();
@@ -408,7 +414,7 @@ The page is rebuilt on every load by replaying all recorded run_js scripts, in o
         }
         const CONTENT_KEY = `ouroboros:watch:${embedded.savedAt ?? 'live'}`;
         const TRACE_KEY = CONTENT_KEY + ':activity';
-        const load = key => { if (verification) return null; try { return JSON.parse(localStorage.getItem(key)); } catch { return null; } };
+        const load = key => { try { return JSON.parse(localStorage.getItem(key)); } catch { return null; } };
         const storedActivity = load(TRACE_KEY);
         const activity = Array.isArray(storedActivity) ? storedActivity.filter(t => t && Number.isFinite(t.task) && Array.isArray(t.calls) && Array.isArray(t.requests)).slice(-10) : [];
         const storedSettings = load(SETTINGS_KEY);
@@ -428,8 +434,11 @@ The page is rebuilt on every load by replaying all recorded run_js scripts, in o
         const importBackup = saved.importBackup ?? null;
         let saveTimer = 0, contentDirty = false;
         const cancelSave = () => { clearTimeout(saveTimer); saveTimer = 0; contentDirty = false; };
-        const saveSettings = () => { if (!verification) localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings)); };
-        const saveContent = () => { if (!verification) localStorage.setItem(CONTENT_KEY, JSON.stringify({ ...state, importBackup })); cancelSave(); };
+        const saveSettings = (what = 'settings', task) => {
+            try { localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings)); return true; }
+            catch (e) { log('error', `Could not save ${what}: ${e.message}`, task); return false; }
+        };
+        const saveContent = () => { localStorage.setItem(CONTENT_KEY, JSON.stringify({ ...state, importBackup })); cancelSave(); };
         const flushContent = () => {
             clearTimeout(saveTimer); saveTimer = 0;
             if (!contentDirty) return;
@@ -443,6 +452,7 @@ The page is rebuilt on every load by replaying all recorded run_js scripts, in o
         let busy = true;         // true until replay finishes
         let importing = false, dataBoundary = state.mutations.length;
         let draftImages = [], activeImages = [], preparingImages = false, exporting = false, imageDatabase;
+        const locked = () => busy || !!controller || importing || exporting || preparingImages;   // nothing may change the canvas while a task, import, export or image upload is in flight
         const imageCache = new Map();
         const tileData = new Map();
         const runtimeErrors = [];
@@ -464,7 +474,6 @@ The page is rebuilt on every load by replaying all recorded run_js scripts, in o
                 if (previous >= dataBoundary) state.mutations[previous] = { data };
                 else state.mutations.push({ data });
                 tileData.set(id, data.value);
-                if (verification) return;
                 contentDirty = true;
                 if (!saveTimer) saveTimer = setTimeout(flushContent, 250);
             },
@@ -570,7 +579,7 @@ The page is rebuilt on every load by replaying all recorded run_js scripts, in o
         function renderDraftImages() {
             $('draft-images').replaceChildren(...draftImages.map(image => imageItem(image, true)));
             $('draft-images').hidden = !draftImages.length;
-            setRunning(!!controller);
+            renderControls();
         }
 
         function imageStatus(message = '') {
@@ -578,10 +587,10 @@ The page is rebuilt on every load by replaying all recorded run_js scripts, in o
         }
 
         async function addImages(files) {
-            if (busy || controller || importing || exporting || preparingImages) return;
+            if (locked()) return;
             const selected = [...files]; $('image-files').value = ''; if (!selected.length) return;
             if (selected.length + draftImages.length > MAX_IMAGES) return imageStatus(`Attach up to ${MAX_IMAGES} images per message.`);
-            preparingImages = true; setRunning(false); imageStatus();
+            preparingImages = true; renderControls(); imageStatus();
             const prepared = [];
             try { for (const file of selected) prepared.push(await prepareImage(file)); draftImages.push(...prepared); }
             catch (e) { for (const image of prepared) { URL.revokeObjectURL(imageCache.get(image.id).url); imageCache.delete(image.id); } imageStatus(e.message || 'Could not read this image.'); }
@@ -602,7 +611,7 @@ The page is rebuilt on every load by replaying all recorded run_js scripts, in o
         function htmlOf(el) {
             const clone = el.cloneNode(true);
             clone.querySelectorAll(HARNESS).forEach(n => n.replaceChildren(document.createComment(' harness, omitted ')));
-            clone.querySelectorAll('style').forEach(n => /tailwindcss|--tw-/.test(n.textContent) && n.remove());
+            clone.querySelectorAll('style').forEach(n => tailwindStyle(n.textContent) && n.remove());
             return clone.outerHTML;
         }
 
@@ -637,7 +646,6 @@ The page is rebuilt on every load by replaying all recorded run_js scripts, in o
         // Diagnostic history is bounded and stays on this device, outside exported workspaces.
         let traceSaveFailed = false;
         function saveActivity() {
-            if (verification) return;
             activity.splice(0, Math.max(0, activity.length - 10));
             while (JSON.stringify(activity).length > 200000) {
                 if (activity.length > 1) activity.shift();
@@ -662,15 +670,12 @@ The page is rebuilt on every load by replaying all recorded run_js scripts, in o
             return { app_id, exists: windows.has(app_id), state_keys: Object.keys(tileData.get(app_id) ?? {}).slice(0, 30), order: 'newest_first', records: records.map(({ code, ...m }) => ({ ...m, chars: code.length })), source: source.slice(offset, end), next_offset: end < source.length ? end : null };
         }
 
-        const fetchAsset = window.fetch.bind(window);
-        // The host requires Lucide; message rendering dependencies are optional.
-        const verificationScripts = [
-            'https://cdn.jsdelivr.net/npm/lucide@1.47.0/dist/umd/lucide.min.js',
-            'https://cdn.jsdelivr.net/npm/markdown-it@15.0.2/dist/browser/markdown-it.umd.min.js',
-            'https://cdn.jsdelivr.net/npm/katex@0.18.7/dist/katex.min.js',
-            'https://cdn.jsdelivr.net/npm/@mdit/plugin-tex@1.1.1/dist/cdn.umd.js',
-        ];
-        let verificationAssets;
+        const fetchAsset = window.fetch.bind(window);   // apps may wrap window.fetch; dependencies load through the original
+        // A verification copy inlines the page's external scripts: Tailwind as its compiled stylesheet, the libraries as fetched source. Only Lucide is required.
+        const externalScripts = [...document.scripts].map(script => script.getAttribute('src')).filter(Boolean);
+        const tailwindScript = externalScripts.find(src => src.includes('tailwindcss')), libraries = externalScripts.filter(src => src !== tailwindScript);
+        const scriptTag = src => `<script src="${src}"><` + '/script>';
+        let libraryAssets;
         async function testApps({ app_ids, code, viewport }) {
             if (verification) throw new Error('Nested verification is not supported.');
             if (!app_ids.length || app_ids.some(id => !windows.has(id) || $(id).matches(HARNESS))) throw new Error('Choose existing generated app IDs.');
@@ -688,31 +693,29 @@ The page is rebuilt on every load by replaying all recorded run_js scripts, in o
             let receive, abort;
             try {
                 if (upstream?.aborted) stop();
-                verificationAssets ??= Promise.all(verificationScripts.map(async (src, index) => {
+                libraryAssets ??= Promise.all(libraries.map(async src => {
                     try {
                         const response = await fetchAsset(src, { credentials: 'omit', signal: signal.signal });
                         if (!response.ok) throw new Error(`Could not load verification dependency: ${response.status}`);
                         return await response.text();
                     } catch (e) {
-                        if (index === 0 || signal.signal.aborted) throw e;
+                        if (src.includes('lucide') || signal.signal.aborted) throw e;
                         return '';
                     }
-                })).catch(e => { verificationAssets = null; throw e; });
-                const assets = await verificationAssets;
-                if (assets.some(asset => !asset)) verificationAssets = null;
+                })).catch(e => { libraryAssets = null; throw e; });
+                const assets = await libraryAssets;
+                if (assets.some(asset => !asset)) libraryAssets = null;
                 await new Promise(resolve => setTimeout(resolve, 0));
                 if (signal.signal.aborted) throw new DOMException('Verification cancelled or timed out.', 'AbortError');
                 const snapshot = { history: [], mutations: state.mutations.filter((m, index) => sources.has(index) || (m.layout && app_ids.includes(m.layout.id)))
                     .concat(app_ids.filter(id => tileData.has(id)).map(id => ({ data: { id, value: copyData(tileData.get(id)) } }))), verification: { nonce, app_ids, code } };
-                const json = value => JSON.stringify(value).replace(/</g, '\\u003c');
                 const script = source => '<script>(0,eval)(' + json(source) + ');<' + '/script>';
                 const policy = "default-src 'none'; script-src 'unsafe-inline' 'unsafe-eval'; style-src 'unsafe-inline'; img-src data:; font-src data:; frame-src about:; form-action 'none'; base-uri 'none'";
-                let html = pristine.replace('<html ', '<html data-verification ')
-                    .replace('<head>', `<head><meta http-equiv="Content-Security-Policy" content="${policy}">`)
-                    .replace(/(<script type="application\/json" id="ouroboros-state">)[\s\S]*?(<\/script>)/, (_, open, close) => open + json(snapshot) + close);
-                const css = [...document.querySelectorAll('style')].filter(el => /tailwindcss|--tw-/.test(el.textContent)).map(el => el.textContent).join('\n');
-                html = html.replace('<script src="https://cdn.tailwindcss.com"><' + '/script>', () => script(`const style=document.createElement('style');style.textContent=${json(css)};document.head.append(style);`));
-                verificationScripts.forEach((src, i) => { html = html.replace(`<script src="${src}"><` + '/script>', () => assets[i] ? script(assets[i]) : ''); });
+                let html = pageWith(snapshot).replace('<html ', '<html data-verification ')
+                    .replace('<head>', `<head><meta http-equiv="Content-Security-Policy" content="${policy}">`);
+                const css = [...document.querySelectorAll('style')].filter(el => tailwindStyle(el.textContent)).map(el => el.textContent).join('\n');
+                html = html.replace(scriptTag(tailwindScript), () => script(`const style=document.createElement('style');style.textContent=${json(css)};document.head.append(style);`));
+                libraries.forEach((src, i) => { html = html.replace(scriptTag(src), () => assets[i] ? script(assets[i]) : ''); });
                 // The trusted wrapper keeps app code separate and restricts nested documents.
                 const wrapper = `const child=document.querySelector('iframe');addEventListener('message',e=>{if(e.source===child.contentWindow&&e.data?.nonce===${json(nonce)})parent.postMessage(e.data,'*');});child.getBoundingClientRect();child.srcdoc=${json(html)};`;
                 const frameHtml = `<!DOCTYPE html><html><head><meta http-equiv="Content-Security-Policy" content="${policy}"><style>body{margin:0}iframe{width:${width}px;height:${height}px;border:0;display:block}</style></head><body><iframe sandbox="allow-scripts allow-forms"></iframe>${script(wrapper)}</body></html>`;
@@ -864,7 +867,7 @@ The page is rebuilt on every load by replaying all recorded run_js scripts, in o
             flushContent();
             activeImages = images;
             controller = new AbortController();
-            setRunning(true);
+            renderControls();
             const task = Date.now();
             const trace = { task, model: clip(redact(settings.model), 200), contract: fingerprint($('ouroboros-system_prompt').textContent + JSON.stringify(TOOL_SCHEMAS)), startedAt: task, status: 'running', prompt: clip(redact(prompt), 1000), calls: [], requests: [] };
             activity.push(trace); saveActivity();
@@ -895,8 +898,7 @@ The page is rebuilt on every load by replaying all recorded run_js scripts, in o
                     } else completeUsage = false;
                     settings.usage.lastTask = completeUsage ? { ...taskUsage } : null;
                     renderUsage();
-                    try { saveSettings(); }
-                    catch (e) { log('error', `Could not save token usage: ${e.message}`, task); }
+                    saveSettings('token usage', task);
                     input.push(...output);
                     if (text) log('assistant', text, task);
                     if (!calls.length) { trace.status = 'complete'; summary = text; break; }
@@ -917,8 +919,7 @@ The page is rebuilt on every load by replaying all recorded run_js scripts, in o
                         saveTask(task, prompt, summary || '(done)', before, images); saved = true;
                     }
                 } catch (e) { log('error', `Could not save this task: ${e.message}`, task); }
-                try { saveSettings(); }
-                catch (e) { log('error', `Could not save token usage: ${e.message}`, task); }
+                saveSettings('token usage', task);
                 Object.assign(trace, { durationMs: Date.now() - task, usage: taskUsage, saved, summary: clip(redact(summary), 2000) });
                 saveActivity();
                 controller = null;
@@ -926,7 +927,7 @@ The page is rebuilt on every load by replaying all recorded run_js scripts, in o
                     draftImages = [...images]; els.prompt.value = prompt; resizePrompt(); renderDraftImages();
                 }
                 activeImages = [];
-                setRunning(false);
+                renderControls();
                 els.status.textContent = saved ? 'Saved locally' : responded ? 'Not saved' : 'Ready';
                 pruneImages().catch(() => {});
             }
@@ -959,22 +960,19 @@ The page is rebuilt on every load by replaying all recorded run_js scripts, in o
         }
 
         async function exportHtml() {
-            if (busy || controller || importing || exporting || preparingImages) return;
-            exporting = true; setRunning(false);
+            if (locked()) return;
+            exporting = true; renderControls();
             try {
                 syncWindows(); rememberWindows(false); flushContent();
                 const attached = historyImages(state.history);
                 const images = attached.length ? await Promise.all(attached.map(async image => ({ id: image.id, data: await imageDataUrl((await getImage(image)).blob) }))) : [];
-                const json = JSON.stringify({ ...state, ...(images.length ? { images } : {}), savedAt: Date.now() }).replace(/</g, '\\u003c');
-                const html = pristine
-                    .replace(/<[s]tyle[^>]*>[\s\S]*?<\/[s]tyle>/g, s => /tailwindcss|--tw-/.test(s) ? '' : s)
-                    .replace(/(<script type="application\/json" id="ouroboros-state">)[\s\S]*?(<\/script>)/, (_, open, close) => open + json + close);
+                const html = pageWith({ ...state, ...(images.length ? { images } : {}), savedAt: Date.now() });
                 const a = document.createElement('a');
                 a.href = URL.createObjectURL(new Blob([html], { type: 'text/html' }));
                 a.download = `ouroboros_${new Date().toLocaleString('sv').replace(/[: ]/g, '-')}.html`;
                 a.click(); URL.revokeObjectURL(a.href); log('system', 'Exported successfully.');
             } catch (e) { log('error', `Could not export workspace: ${e.message}`); }
-            finally { exporting = false; setRunning(false); }
+            finally { exporting = false; renderControls(); }
         }
 
         function readImport(html) {
@@ -1012,6 +1010,15 @@ The page is rebuilt on every load by replaying all recorded run_js scripts, in o
             return { history: data.history, mutations: data.mutations, ...(images.length ? { images } : {}) };
         }
 
+        // Every canvas swap writes the next content in one go, so the current canvas survives a storage failure, then reloads to replay it from the pristine page.
+        async function restart(next, backup = importBackup) {
+            localStorage.setItem(CONTENT_KEY, JSON.stringify(backup ? { ...next, importBackup: backup } : next));
+            cancelSave();
+            busy = true; draftImages = [];
+            if (imageDatabase) await pruneImages(next, backup).catch(() => {});
+            location.reload();
+        }
+
         async function replaceWorkspace(next) {
             let history = next.history;
             if (next.images?.length) {
@@ -1025,46 +1032,35 @@ The page is rebuilt on every load by replaying all recorded run_js scripts, in o
                 for (const image of prepared) await imageRequest('readwrite', store => store.put(image.blob, [CONTENT_KEY, image.id]));
                 history = history.map(message => message.images ? { ...message, images: message.images.map(image => ({ ...image, id: replacements.get(image.id) })) } : message);
             }
-            // One write keeps the current canvas intact if the import exceeds local storage capacity.
-            localStorage.setItem(CONTENT_KEY, JSON.stringify({ history, mutations: next.mutations, importBackup: state }));
-            cancelSave();
-            busy = true;
-            location.reload();
+            await restart({ history, mutations: next.mutations }, state);
         }
 
         async function importHtml(file) {
-            if (!file || busy || controller || importing || exporting || preparingImages) return;
-            importing = true; setRunning(false); els.status.textContent = 'Reading import…';
+            if (!file || locked()) return;
+            importing = true; renderControls(); els.status.textContent = 'Reading import…';
             try {
                 const next = readImport(await file.text());
                 if (!confirm(`Import ${file.name}? This replaces the canvas and saves a backup. Imported tiles run JavaScript; only import files you trust. API settings and usage stay on this device.`)) return;
                 await replaceWorkspace(next);
             } catch (e) { log('error', `Could not import workspace: ${e.message}`); }
-            finally { importing = false; $('import-file').value = ''; if (!busy) { setRunning(!!controller); pruneImages().catch(() => {}); } }
+            finally { importing = false; $('import-file').value = ''; if (!busy) { renderControls(); pruneImages().catch(() => {}); } }
         }
 
         async function restoreImportBackup() {
-            if (!importBackup || busy || controller || importing || exporting || preparingImages) return;
+            if (!importBackup || locked()) return;
             if (!confirm('Restore the backup? The current canvas will become the new backup. API settings and usage are kept.')) return;
-            importing = true; setRunning(false);
+            importing = true; renderControls();
             try { await replaceWorkspace(importBackup); }
             catch (e) { log('error', `Could not restore backup: ${e.message}`); }
-            finally { importing = false; if (!busy) setRunning(false); }
+            finally { importing = false; if (!busy) renderControls(); }
         }
 
         async function restoreVersion(revision, historyLength) {
-            if (!Number.isInteger(revision) || busy || controller || importing || exporting || preparingImages) return;
+            if (!Number.isInteger(revision) || locked()) return;
             if (!confirm('Restore this version? Later tasks and window changes will be removed. Settings and token usage are kept.')) return;
             flushContent();
-            const next = { history: state.history.slice(0, historyLength), mutations: state.mutations.slice(0, revision) };
-            try {
-                localStorage.setItem(CONTENT_KEY, JSON.stringify({ ...next, importBackup }));
-                cancelSave();
-                Object.assign(state, next);
-                busy = true; draftImages = [];
-                if (imageDatabase) await pruneImages(next).catch(() => {});
-                location.reload();
-            } catch (e) { log('error', `Could not restore version: ${e.message}`); }
+            try { await restart({ history: state.history.slice(0, historyLength), mutations: state.mutations.slice(0, revision) }); }
+            catch (e) { log('error', `Could not restore version: ${e.message}`); }
         }
 
         function undo() {
@@ -1073,18 +1069,14 @@ The page is rebuilt on every load by replaying all recorded run_js scripts, in o
         }
 
         async function reset() {
-            if (busy || controller || importing || exporting || preparingImages) return;
+            if (locked()) return;
             const message = embedded.savedAt
                 ? 'Reset to the exported snapshot? Everything done since the export is discarded; settings are kept.'
                 : 'Reset the page to its pristine state? Mutations and history are cleared; settings are kept.';
             if (!confirm(message + (importBackup ? ' The import backup will also be cleared.' : ''))) return;
-            const next = { history: embedded.history, mutations: embedded.mutations };
-            localStorage.setItem(CONTENT_KEY, JSON.stringify(next));
-            cancelSave();
             activity.length = 0; saveActivity();
-            busy = true; draftImages = [];
-            if (imageDatabase) await pruneImages(next, null).catch(() => {});
-            location.reload();
+            try { await restart({ history: embedded.history, mutations: embedded.mutations }, null); }
+            catch (e) { log('error', `Could not reset canvas: ${e.message}`); }
         }
 
         // --- APP MAP ---
@@ -1093,7 +1085,8 @@ The page is rebuilt on every load by replaying all recorded run_js scripts, in o
             ['#24695b', '#edf5f1'], ['#2864b4', '#eef3fc'], ['#7451ad', '#f3eff9'],
             ['#a45732', '#faf1eb'], ['#5f7036', '#f2f5e9'], ['#aa466b', '#faeef3'],
         ];
-        const desktop = $('desktop'), layer = $('window-layer'), toolbar = $('map-toolbar'), windows = new Map();
+        const paintTile = win => { win.el.style.setProperty('--tile', TILE_COLORS[win.tone][0]); win.el.style.setProperty('--tint', TILE_COLORS[win.tone][1]); };
+        const desktop = $('desktop'), layer = $('window-layer'), toolbar = $('map-toolbar'), home = $('map-home'), homeTitle = $('map-home-title'), windows = new Map();
         const camera = { x: 0, y: 0, zoom: .7, expansion: 0, focus: null };
         const reducedMotion = matchMedia('(prefers-reduced-motion: reduce)'), coarsePointer = matchMedia('(pointer: coarse)');
         const animationsDisabled = () => settings.disableAnimations || reducedMotion.matches;
@@ -1304,10 +1297,10 @@ The page is rebuilt on every load by replaying all recorded run_js scripts, in o
                 }
                 if (entering) win.el.focus({ preventScroll: true });
             }
-            updateValue($('map-home-title'), 'textContent', busy ? 'Restoring…' : focus > .95 ? 'All apps' : 'Ouroboros');
-            updateValue($('map-home'), 'title', busy ? 'Restoring workspace' : !atHome ? 'All apps' : expanded ? 'Show app map' : 'Expand apps');
-            updateValue($('map-home'), 'ariaLabel', $('map-home').title);
-            updateValue($('map-home'), 'ariaPressed', String(expanded));
+            updateValue(homeTitle, 'textContent', busy ? 'Restoring…' : focus > .95 ? 'All apps' : 'Ouroboros');
+            updateValue(home, 'title', busy ? 'Restoring workspace' : !atHome ? 'All apps' : expanded ? 'Show app map' : 'Expand apps');
+            updateValue(home, 'ariaLabel', home.title);
+            updateValue(home, 'ariaPressed', String(expanded));
         }
 
         function moveCamera(next, animate = true, done = () => {}) {
@@ -1416,14 +1409,14 @@ The page is rebuilt on every load by replaying all recorded run_js scripts, in o
                 if (win.title !== title) {
                     renamed = true;
                     win.title = title; el.setAttribute('aria-label', title); win.face.setAttribute('aria-label', `Open ${title}`);
-                    win.face.querySelector('.tile-title').textContent = title;
+                    win.label.textContent = title;
                 }
                 const icon = Object.hasOwn(lucide.icons, el.dataset.windowIcon) ? el.dataset.windowIcon : 'AppWindow';
-                if (win.icon !== icon) { win.icon = icon; drawIcon(win.face.querySelector('.tile-icon'), icon); drawIcon(win.mark, icon); }
+                if (win.icon !== icon) { win.icon = icon; drawIcon(win.faceIcon, icon); drawIcon(win.mark, icon); }
                 const sizeKey = [el.dataset.width, el.dataset.height, el.dataset.aspectRatio].join('|');
                 if (win.sizeKey !== sizeKey) { win.sizeKey = sizeKey; layoutCache = null; }
                 Object.assign(el.style, { position: 'absolute', left: '0px', top: '0px', margin: '0px' });
-                el.style.setProperty('--tile', TILE_COLORS[win.tone][0]); el.style.setProperty('--tint', TILE_COLORS[win.tone][1]);
+                paintTile(win);
                 win.face.disabled = busy || importing;
             }
             if (changed) { layoutCache = null; layoutApps(); }
@@ -1443,15 +1436,12 @@ The page is rebuilt on every load by replaying all recorded run_js scripts, in o
 
         function applyLayout({ id, tone }) {
             const win = windows.get(id);
-            if (win && TILE_COLORS[tone]) {
-                win.tone = tone;
-                win.el.style.setProperty('--tile', TILE_COLORS[tone][0]); win.el.style.setProperty('--tint', TILE_COLORS[tone][1]);
-            }
+            if (win && TILE_COLORS[tone]) { win.tone = tone; paintTile(win); }
         }
 
         function uninstallWindow(id) {
             const win = windows.get(id);
-            if (!win || win.el.matches(HARNESS) || busy || controller || importing || exporting || preparingImages) return;
+            if (!win || win.el.matches(HARNESS) || locked()) return;
             if (!confirm(`Uninstall ${win.title}? You can undo this change from history.`)) return;
             const task = Date.now(), before = state.mutations.length;
             const prompt = `Uninstall ${win.title}`, summary = 'Tile uninstalled.';
@@ -1460,7 +1450,7 @@ The page is rebuilt on every load by replaying all recorded run_js scripts, in o
                 state.mutations.push({ task, apps: [id], code: `document.getElementById(${JSON.stringify(id)})?.remove();` });
                 syncWindows(); rememberWindows();
                 saveTask(task, prompt, summary, before);
-                log('user', prompt, task); log('assistant', summary, task); setRunning(false);
+                log('user', prompt, task); log('assistant', summary, task); renderControls();
             } catch (e) { log('error', `Could not uninstall tile: ${e.message}`); }
         }
 
@@ -1538,7 +1528,7 @@ The page is rebuilt on every load by replaying all recorded run_js scripts, in o
                 touch = null;
             }, { capture: true });
             document.addEventListener('touchcancel', () => { touch = null; }, { capture: true });
-            $('map-home').onclick = () => {
+            home.onclick = () => {
                 if (!atHome) returnHome();
                 else switchView();
             };
@@ -1616,7 +1606,7 @@ The page is rebuilt on every load by replaying all recorded run_js scripts, in o
             if (follow || kind === 'user') els.log.scrollTop = els.log.scrollHeight;
         }
 
-        function logTool(name, args = {}, task) {
+        function logTool(name, args, task) {
             args ||= {};
             const follow = nearBottom();
             const steps = $(`task-${task}`)?.querySelector('.task-steps');
@@ -1661,30 +1651,30 @@ The page is rebuilt on every load by replaying all recorded run_js scripts, in o
                 return new Option(`${h.role === 'user' ? 'Before ' : ''}${new Date(h.task).toLocaleString()} · ${clip(prompt.replace(/\s+/g, ' '), 60)}`, String(h.index));
             }));
             if (!versions.length) $('history-version').add(new Option('No saved versions yet', ''));
-            for (const id of ['history-version', 'rollback-btn']) $(id).disabled = busy || !!controller || importing || exporting || preparingImages || !versions.length;
+            for (const id of ['history-version', 'rollback-btn']) $(id).disabled = locked() || !versions.length;
         }
 
         function renderTiles() {
             const tiles = [...windows.values()].filter(win => !win.el.matches(HARNESS));
-            $('installed-tiles').innerHTML = tiles.map(win => `<li><span>${esc(win.title)}</span><button type="button" class="ui-button is-secondary is-danger shrink-0" data-uninstall="${esc(win.el.id)}" ${busy || controller || importing || exporting || preparingImages ? 'disabled' : ''}>Uninstall</button></li>`).join('')
+            $('installed-tiles').innerHTML = tiles.map(win => `<li><span>${esc(win.title)}</span><button type="button" class="ui-button is-secondary is-danger shrink-0" data-uninstall="${esc(win.el.id)}" ${locked() ? 'disabled' : ''}>Uninstall</button></li>`).join('')
                 || '<li class="text-xs text-[var(--muted)]">No generated tiles yet.</li>';
         }
 
-        function setRunning(on) {
-            $('map-home').disabled = busy;
-            els.btn.textContent = on ? 'Stop' : 'Send ↑';
-            els.btn.classList.toggle('is-running', on);
-            els.btn.disabled = busy || importing || exporting || preparingImages;
-            els.prompt.disabled = busy || importing || exporting || preparingImages;
-            const locked = busy || on || importing || exporting || preparingImages;
-            $('attach-images-btn').disabled = locked || draftImages.length >= MAX_IMAGES;
-            for (const button of $('draft-images').querySelectorAll('button')) button.disabled = locked;
-            for (const id of ['export-btn', 'import-btn', 'import-backup-btn', 'reset-btn', 'save-btn']) $(id).disabled = locked;
+        // Every control reflects the same few flags, so they are all re-rendered whenever one changes.
+        function renderControls() {
+            const running = !!controller, lock = locked();
+            home.disabled = busy;
+            els.btn.textContent = running ? 'Stop' : 'Send ↑';
+            els.btn.classList.toggle('is-running', running);
+            els.btn.disabled = els.prompt.disabled = lock && !running;
+            $('attach-images-btn').disabled = lock || draftImages.length >= MAX_IMAGES;
+            for (const button of $('draft-images').querySelectorAll('button')) button.disabled = lock;
+            for (const id of ['export-btn', 'import-btn', 'import-backup-btn', 'reset-btn', 'save-btn']) $(id).disabled = lock;
             for (const button of document.querySelectorAll('.window-controls button, .tile-face')) button.disabled = busy || importing;
             const last = $(`task-${state.history.at(-1)?.task}`);
-            els.undo.hidden = on || busy || importing || !last || !Number.isInteger(state.history.findLast(h => h.role === 'user')?.before);
+            els.undo.hidden = running || busy || importing || !last || !Number.isInteger(state.history.findLast(h => h.role === 'user')?.before);
             if (last) last.append(els.undo);
-            els.status.textContent = on ? 'Thinking…' : busy ? 'Restoring…' : preparingImages ? 'Preparing images…' : exporting ? 'Exporting…' : 'Ready';
+            els.status.textContent = running ? 'Thinking…' : busy ? 'Restoring…' : preparingImages ? 'Preparing images…' : exporting ? 'Exporting…' : 'Ready';
             renderHistory();
             renderTiles();
         }
@@ -1695,7 +1685,7 @@ The page is rebuilt on every load by replaying all recorded run_js scripts, in o
         }
 
         async function submit() {
-            if (busy || controller || importing || exporting || preparingImages) return;
+            if (locked()) return;
             if (!settings.apiKey || !settings.model) {
                 focusApp('ouroboros-settings');
                 $('api-key').focus();
@@ -1705,10 +1695,10 @@ The page is rebuilt on every load by replaying all recorded run_js scripts, in o
             const images = [...draftImages];
             if (!prompt && !images.length) return;
             if (images.length) {
-                preparingImages = true; setRunning(false); imageStatus();
+                preparingImages = true; renderControls(); imageStatus();
                 try { for (const image of images) await imageRequest('readwrite', store => store.put(imageCache.get(image.id).blob, [CONTENT_KEY, image.id])); }
                 catch (e) { imageStatus(`Could not save images: ${e.message}`); return; }
-                finally { preparingImages = false; setRunning(false); }
+                finally { preparingImages = false; renderControls(); }
             }
             els.prompt.value = ''; resizePrompt();
             draftImages = []; renderDraftImages();
@@ -1726,8 +1716,7 @@ The page is rebuilt on every load by replaying all recorded run_js scripts, in o
                 option.onchange = () => {
                     settings.wallpaper = option.value;
                     document.documentElement.dataset.wallpaper = option.value;
-                    try { saveSettings(); }
-                    catch (e) { log('error', `Could not save background: ${e.message}`); }
+                    saveSettings('background');
                 };
             }
             const motion = $('disable-animations');
@@ -1735,8 +1724,7 @@ The page is rebuilt on every load by replaying all recorded run_js scripts, in o
             motion.onchange = () => {
                 settings.disableAnimations = motion.checked;
                 renderMap();
-                try { saveSettings(); }
-                catch (e) { log('error', `Could not save settings: ${e.message}`); }
+                saveSettings();
             };
             $('model-btn').textContent = settings.model || 'Choose model';
             $('model-btn').onclick = () => focusApp('ouroboros-settings');
@@ -1746,12 +1734,10 @@ The page is rebuilt on every load by replaying all recorded run_js scripts, in o
                     settings[key] = field.value.trim() || field.defaultValue;
                     field.value = settings[key];
                 }
-                try {
-                    saveSettings();
-                    $('model-btn').textContent = settings.model || 'Choose model';
-                    focusApp('ouroboros-core');
-                    els.status.textContent = 'Settings saved';
-                } catch (e) { log('error', `Could not save settings: ${e.message}`); }
+                if (!saveSettings()) return;
+                $('model-btn').textContent = settings.model || 'Choose model';
+                focusApp('ouroboros-core');
+                els.status.textContent = 'Settings saved';
             };
             $('export-btn').onclick = exportHtml;
             $('import-btn').onclick = () => $('import-file').click();
@@ -1789,7 +1775,7 @@ The page is rebuilt on every load by replaying all recorded run_js scripts, in o
             };
             els.prompt.oninput = resizePrompt;
             els.prompt.addEventListener('keydown', e => { if (!e.isComposing && (e.ctrlKey || e.metaKey) && e.key === 'Enter') { e.preventDefault(); submit(); } });
-            setRunning(false);
+            renderControls();
             await Promise.all(historyImages(state.history).map(image => getImage(image).catch(() => {})));
             for (const h of state.history) log(h.role, h.content, h.task, h.images);
             for (const trace of activity) if (state.history.some(h => h.task === trace.task)) {
@@ -1804,7 +1790,7 @@ The page is rebuilt on every load by replaying all recorded run_js scripts, in o
             busy = false;
             if (verification) { await finishVerification(setupFailures); return; }
             overview(false);
-            setRunning(false);
+            renderControls();
             desktop.removeAttribute('inert'); desktop.removeAttribute('aria-busy');
             document.body.classList.remove('restoring');
             if (!animationsDisabled()) revealAnimations = [...windows.values()].flatMap(({ el }, index) => {
