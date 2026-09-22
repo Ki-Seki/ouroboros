@@ -10,15 +10,10 @@
     <style>
         html, body { touch-action: pan-x pan-y; overscroll-behavior: none; }
         .no-animations *, .no-animations *::before, .no-animations *::after { animation: none !important; transition: none !important; scroll-behavior: auto !important; }
-        html.is-camera-transition { view-transition-name: none; }
-        .is-camera-transition::view-transition { pointer-events: none; }
-        .is-camera-transition::view-transition-group(*) { animation-name: none; transform-origin: 0 0; }
-        .is-camera-transition::view-transition-old(*), .is-camera-transition::view-transition-new(*) { width: 100%; height: 100%; object-fit: contain; animation-duration: 180ms; animation-delay: 0s; animation-timing-function: cubic-bezier(.333333, 0, .666667, 1); }
         body { margin: 0; background: #f2f4f8; color: #1d1d1f; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; -webkit-font-smoothing: antialiased; }
         body.restoring > :not(#map-toolbar):not(#desktop-wallpaper) { visibility: hidden !important; opacity: 0 !important; }
         #desktop-wallpaper { position: fixed; inset: 0; width: 100%; height: 100%; pointer-events: none; }
         #desktop { position: fixed; inset: 0; overflow: hidden; isolation: isolate; overscroll-behavior: contain; scrollbar-gutter: stable; cursor: grab; }
-        #desktop.is-ready { transition: opacity 180ms ease-out; }
         #desktop, #desktop * { touch-action: none; }
         #desktop.has-focus, #desktop.has-focus *, #desktop.is-expanded, #desktop.is-expanded * { touch-action: pan-x pan-y; }
         #desktop.is-panning { cursor: grabbing; }
@@ -27,9 +22,8 @@
         #desktop.is-expanded { overflow: auto; cursor: default; }
         #desktop.is-switching { overflow: hidden; pointer-events: none; }
         #desktop.is-expanded.has-overlay { overflow: hidden; }
-        #desktop.is-camera-animating { overflow: hidden; }
-        #window-layer > .desktop-window { --tile: #24695b; --tint: #edf5f1; --ink: #1d1d1f; --muted: #6e6e73; --line: #e5e5ea; --surface: #f5f5f7; --accent: var(--tile); position: absolute; left: 0; top: 0; display: flex; flex-direction: column; box-sizing: border-box; overflow: hidden; transform-origin: 0 0; color: var(--ink); background: transparent; font-size: 14px; line-height: 1.5; border: 1px solid #ffffffb3; border-radius: 50% !important; box-shadow: 0 2px 6px #18233305, 0 12px 36px #1823330b, 0 0 0 1px #18233308; }
-        #window-layer > .desktop-window > :not(.tile-face) { opacity: 0; }
+        #window-layer > .desktop-window { --tile: #24695b; --tint: #edf5f1; --ink: #1d1d1f; --muted: #6e6e73; --line: #e5e5ea; --surface: #f5f5f7; --accent: var(--tile); position: absolute; left: 0; top: 0; display: flex; flex-direction: column; box-sizing: border-box; overflow: hidden; transform-origin: 0 0; color: var(--ink); background: rgb(255 255 255 / var(--detail, 0)); font-size: 14px; line-height: 1.5; border: 1px solid #ffffffb3; border-radius: var(--radius, 50%) !important; box-shadow: 0 2px 6px #18233305, 0 12px 36px #1823330b, 0 0 0 1px #18233308; }
+        #window-layer > .desktop-window > :not(.tile-face) { opacity: var(--detail, 0); }
         #window-layer > .desktop-window:focus { outline: none; }
         #window-layer > .desktop-window.is-focused { box-shadow: 0 4px 12px #18233306, 0 24px 80px #18233318, 0 0 0 1px #18233308; }
         #window-layer > .desktop-window > .window-header { display: flex; align-items: center; gap: 10px; min-height: 56px; padding: 10px 12px 10px 20px; flex-shrink: 0; color: var(--ink); background: #fff; border-bottom: 1px solid var(--line); cursor: inherit; user-select: none; }
@@ -39,15 +33,15 @@
         #window-layer .window-controls { display: flex; flex: none; margin-left: auto; }
         #window-layer .window-controls button { display: grid; place-items: center; flex: none; width: 32px; height: 32px; padding: 0; aspect-ratio: 1; border-radius: 50%; color: var(--muted); }
         #window-layer .window-controls button:hover { color: var(--ink); background: var(--surface); }
-        #window-layer .tile-face { position: absolute; inset: 0; z-index: 2; display: grid; align-content: center; justify-items: center; gap: 12px; width: 100%; border: 1px solid #ffffffbf; border-radius: inherit; color: var(--ink); background: linear-gradient(145deg, #ffffffe0, #ffffff80 48%, color-mix(in srgb, var(--tint) 82%, transparent)); backdrop-filter: blur(14px) saturate(1.15); box-shadow: inset 1px 1px 1px #ffffffcc, inset -1px -1px 1px #ffffff66; opacity: 1; cursor: pointer; }
+        #window-layer .tile-face { position: absolute; inset: 0; z-index: 2; display: grid; align-content: center; justify-items: center; gap: 12px; width: 100%; border: 1px solid #ffffffbf; border-radius: inherit; color: var(--ink); background: linear-gradient(145deg, #ffffffe0, #ffffff80 48%, color-mix(in srgb, var(--tint) 82%, transparent)); backdrop-filter: blur(14px) saturate(1.15); box-shadow: inset 1px 1px 1px #ffffffcc, inset -1px -1px 1px #ffffff66; opacity: calc(1 - var(--detail, 0)); cursor: pointer; }
         #window-layer .tile-face[hidden] { display: none; }
         #window-layer .tile-face:focus-visible { outline: 3px solid var(--accent); outline-offset: -8px; }
-        #window-layer .tile-icon { width: 68px; height: 68px; color: var(--accent); }
+        #window-layer .tile-icon { color: var(--accent); }
         .no-animations #window-layer .tile-face { backdrop-filter: none; background: var(--tint); }
         .ui-icon { display: block; width: 20px; height: 20px; flex: none; }
         #window-layer .window-controls .ui-icon { min-width: 20px; min-height: 20px; aspect-ratio: 1; }
-        #window-layer .tile-icon .ui-icon { width: 100%; height: 100%; stroke-width: 1.75; }
-        #window-layer .tile-title { max-width: 78%; font-size: 18px; font-weight: 500; line-height: 1.3; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+        #window-layer .tile-icon .ui-icon { width: var(--icon-size, 68px); height: var(--icon-size, 68px); stroke-width: 1.75; }
+        #window-layer .tile-title { max-width: 78%; font-size: var(--label-size, 18px); font-weight: 500; line-height: 1.3; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
         #window-layer .tile-title[hidden] { display: none !important; }
         #map-toolbar { position: fixed; inset: 0 0 auto; z-index: 10; display: flex; align-items: center; justify-content: space-between; height: 64px; padding: 0 24px; gap: 12px; }
         #map-toolbar button { min-width: 44px; min-height: 44px; border: 1px solid #ffffffd9; border-radius: 999px; color: #414b5a; background: #ffffffc7; backdrop-filter: blur(12px) saturate(1.2); box-shadow: 0 2px 12px #18233308, inset 0 1px 0 #fff; transition: background .15s, color .15s; }
@@ -1047,7 +1041,7 @@ The page is rebuilt on every load by replaying all recorded run_js scripts, in o
         }
 
         // --- APP MAP ---
-        const TILE_SIZE = 320, SPACING = 384, FOCUS_START = 1.18, FOCUS_END = 1.9, CAMERA_DURATION = 360;
+        const TILE_SIZE = 320, SPACING = 384, FOCUS_START = 1.18, FOCUS_END = 1.9;
         const TILE_COLORS = [
             ['#24695b', '#edf5f1'], ['#2864b4', '#eef3fc'], ['#7451ad', '#f3eff9'],
             ['#a45732', '#faf1eb'], ['#5f7036', '#f2f5e9'], ['#aa466b', '#faeef3'],
@@ -1060,10 +1054,9 @@ The page is rebuilt on every load by replaying all recorded run_js scripts, in o
         const mix = (a, b, t) => a * (1 - t) + b * t;
         const smooth = t => t * t * (3 - 2 * t);
         const focusProgress = () => windows.has(camera.focus) ? smooth(clamp((camera.zoom - FOCUS_START) / (FOCUS_END - FOCUS_START), 0, 1)) : 0;
-        let windowSerial = 0, transitionSerial = 0, nextTone = 0, animation = 0, cameraMotion = null, expanded = false, atHome = false;
+        let windowSerial = 0, nextTone = 0, animation = 0, expanded = false, atHome = false;
         let layoutCache = null, renderFrame = 0;
         const queueRender = () => { if (!renderFrame) renderFrame = requestAnimationFrame(renderMap); };
-        const updateValue = (target, key, value) => { if (target[key] !== value) target[key] = value; };
 
         function drawIcon(target, name) {
             target.replaceChildren(lucide.createElement(lucide.icons[name], { class: 'ui-icon', 'stroke-width': 1.8, 'aria-hidden': 'true', focusable: 'false', preserveAspectRatio: 'xMidYMid meet' }));
@@ -1113,11 +1106,9 @@ The page is rebuilt on every load by replaying all recorded run_js scripts, in o
             return { rects, width, viewportHeight: height, height: Math.max(height, y + 4) };
         }
 
-        function renderMap(measuring = false) {
+        function renderMap() {
             cancelAnimationFrame(renderFrame); renderFrame = 0;
-            const noAnimations = animationsDisabled();
-            if (cameraMotion && noAnimations) { finishCameraMotion(cameraMotion); return; }
-            if (cameraMotion && measuring !== true) return;
+            document.documentElement.classList.toggle('no-animations', animationsDisabled());
             const spread = camera.expansion, switching = spread !== Number(expanded);
             const detail = mix(smooth(clamp((camera.zoom - .82) / .32, 0, 1)), 1, spread);
             const focus = focusProgress();
@@ -1126,19 +1117,15 @@ The page is rebuilt on every load by replaying all recorded run_js scripts, in o
                 layoutCache = expandedLayout(width, height);
                 for (const win of windows.values()) win.size = appSize(win.el, width, height);
             }
-            const board = spread || expanded ? layoutCache : null;
-            const previousScrollX = desktop.scrollLeft, previousScrollY = desktop.scrollTop;
-            const scrollX = spread ? previousScrollX : 0, scrollY = spread ? Math.min(previousScrollY, Math.max(0, board.height - height)) : 0;
-            document.documentElement.classList.toggle('no-animations', noAnimations);
             desktop.classList.toggle('has-focus', focus > .95);
             desktop.classList.toggle('has-overlay', spread > 0 && focus > 0);
             desktop.classList.toggle('is-expanded', spread > 0 || expanded);
             desktop.classList.toggle('is-switching', switching);
-            if (!spread && (previousScrollX || previousScrollY)) { desktop.scrollTop = 0; desktop.scrollLeft = 0; }
+            if (!spread) { desktop.scrollTop = 0; desktop.scrollLeft = 0; }
+            const board = spread || expanded ? layoutCache : null;
             layer.style.height = `${board?.height ?? height}px`;
-            const labelSize = `${Math.max(18, 12 / camera.zoom)}px`, iconSize = `${Math.max(68, 28 / camera.zoom)}px`;
+            const scrollX = desktop.scrollLeft, scrollY = desktop.scrollTop;
             for (const win of windows.values()) {
-                if (measuring === true || noAnimations) { win.bridge?.cancel(); win.bridge = null; }
                 const selected = win.el.id === camera.focus, amount = selected ? focus : 0;
                 const slot = board?.rects.get(win) ?? { x: 0, y: 0, w: TILE_SIZE, h: TILE_SIZE };
                 const size = win.size;
@@ -1151,131 +1138,38 @@ The page is rebuilt on every load by replaying all recorded run_js scripts, in o
                 const y = mix(mix(mapY, slot.y, spread), (height - size.h) / 2 + scrollY, amount);
                 const focused = selected && focus > .95 && !switching;
                 const interactive = !switching && (focused || (expanded && focus === 0));
-                Object.assign(win.el.style, { width: `${!spread && !amount ? TILE_SIZE : w / scale}px`, height: `${!spread && !amount ? TILE_SIZE : h / scale}px`, transform: `translate(${x}px, ${y}px) scale(${scale})`, zIndex: selected ? '3' : '1', filter: selected || noAnimations || !focus ? 'none' : `blur(${focus * 7 / scale}px)`, opacity: selected ? '1' : String(1 - focus * .87) });
-                if (win.detail !== detail) {
-                    win.el.style.backgroundColor = `rgb(255 255 255 / ${detail})`;
-                    win.el.style.setProperty('border-radius', `${mix(TILE_SIZE / 2, 22, detail)}px`, 'important');
-                    win.face.style.opacity = String(1 - detail);
-                }
-                updateValue(win.label.style, 'fontSize', labelSize);
-                updateValue(win.faceIcon.style, 'width', iconSize); updateValue(win.faceIcon.style, 'height', iconSize);
+                Object.assign(win.el.style, { width: `${w / scale}px`, height: `${h / scale}px`, transform: `translate(${x}px, ${y}px) scale(${scale})`, zIndex: selected ? '3' : '1', filter: selected || animationsDisabled() || !focus ? 'none' : `blur(${focus * 7 / scale}px)`, opacity: selected ? '1' : String(1 - focus * .87) });
+                win.el.style.setProperty('--detail', detail);
+                win.el.style.setProperty('--radius', `${mix(TILE_SIZE / 2, 22, detail)}px`);
+                win.el.style.setProperty('--label-size', `${Math.max(18, 12 / camera.zoom)}px`);
+                win.el.style.setProperty('--icon-size', `${Math.max(68, 28 / camera.zoom)}px`);
                 const entering = focused && !win.el.classList.contains('is-focused');
                 win.el.classList.toggle('is-focused', focused);
-                updateValue(win.el, 'inert', focus > .15 && !selected);
-                updateValue(win.face, 'hidden', spread === 1 || focused);
-                updateValue(win.label, 'hidden', TILE_SIZE * camera.zoom < 96);
-                if (win.interactive !== interactive || win.detail !== detail) {
-                    for (const child of win.el.children) if (child !== win.face) {
-                        updateValue(child, 'inert', !interactive); updateValue(child.style, 'opacity', String(detail));
-                    }
-                    win.interactive = interactive; win.detail = detail;
-                }
+                win.el.inert = focus > .15 && !selected;
+                win.face.hidden = spread === 1 || focused;
+                win.face.querySelector('.tile-title').hidden = TILE_SIZE * camera.zoom < 96;
+                for (const child of win.el.children) if (child !== win.face) child.inert = !interactive;
                 const control = win.el.querySelector('.window-controls button'), action = expanded && focus === 0 ? 'focus' : 'home';
                 if (control.dataset.windowAction !== action) {
                     control.dataset.windowAction = action;
                     control.title = action === 'focus' ? 'Focus app' : 'All apps'; control.setAttribute('aria-label', control.title);
                     drawIcon(control, action === 'focus' ? 'Maximize2' : 'Minimize2');
                 }
-                if (entering && measuring !== true) win.el.focus({ preventScroll: true });
+                if (entering) win.el.focus({ preventScroll: true });
             }
-            updateValue($('map-home-title'), 'textContent', busy ? 'Restoring…' : focus > .95 ? 'All apps' : 'Ouroboros');
-            updateValue($('map-home'), 'title', busy ? 'Restoring workspace' : !atHome ? 'All apps' : expanded ? 'Show app map' : 'Expand apps');
-            updateValue($('map-home'), 'ariaLabel', $('map-home').title);
-            updateValue($('map-home'), 'ariaPressed', String(expanded));
-        }
-
-        function cancelCameraMotion() {
-            cancelAnimationFrame(animation);
-            animation = 0;
-            if (!cameraMotion) return;
-            const motion = cameraMotion;
-            const positions = [];
-            try {
-                if (!animationsDisabled()) for (const win of windows.values()) {
-                    const style = getComputedStyle(document.documentElement, `::view-transition-group(${win.transitionName})`);
-                    const width = parseFloat(style.width), height = parseFloat(style.height);
-                    if (!(width > 0 && height > 0) || style.transform === 'none') continue;
-                    const matrix = new DOMMatrix(style.transform);
-                    positions.push({ win, x: matrix.e + width * matrix.a / 2, y: matrix.f + height * matrix.d / 2, width: width * matrix.a });
-                }
-            } catch { positions.length = 0; }
-            cameraMotion = null;
-            motion.transition.skipTransition();
-            for (const animation of motion.animations) animation.cancel();
-            document.documentElement.classList.remove('is-camera-transition'); desktop.classList.remove('is-camera-animating');
-            renderMap();
-            desktop.scrollLeft = motion.scrollX; desktop.scrollTop = motion.scrollY;
-            renderMap();
-            // Add a short correction without overriding transforms from the next drag or pinch.
-            const bridges = [];
-            for (const { win } of positions) win.bridge?.cancel();
-            for (const { win, x, y, width } of positions) {
-                const rect = win.el.getBoundingClientRect(), scale = rect.width / parseFloat(win.el.style.width), ratio = width / rect.width;
-                if (scale > 0 && ratio > 0 && Number.isFinite(ratio)) bridges.push({ win, transform: `translate(${(x - rect.x - rect.width * ratio / 2) / scale}px, ${(y - rect.y - rect.height * ratio / 2) / scale}px) scale(${ratio})` });
-            }
-            for (const { win, transform } of bridges) win.bridge = win.el.animate([
-                { transform }, { transform: 'translate(0px, 0px) scale(1)' },
-            ], { duration: 120, easing: 'ease-out', composite: 'add' });
-        }
-
-        function finishCameraMotion(motion) {
-            if (cameraMotion !== motion) return;
-            cameraMotion = null; cancelAnimationFrame(animation); animation = 0;
-            motion.transition.skipTransition();
-            for (const animation of motion.animations) animation.cancel();
-            document.documentElement.classList.remove('is-camera-transition'); desktop.classList.remove('is-camera-animating');
-            Object.assign(camera, motion.next); renderMap();
-            if (focusProgress() > .95) windows.get(camera.focus).el.focus({ preventScroll: true });
-            motion.done();
+            $('map-home-title').textContent = busy ? 'Restoring…' : focus > .95 ? 'All apps' : 'Ouroboros';
+            $('map-home').title = busy ? 'Restoring workspace' : !atHome ? 'All apps' : expanded ? 'Show app map' : 'Expand apps';
+            $('map-home').setAttribute('aria-label', $('map-home').title);
+            $('map-home').setAttribute('aria-pressed', String(expanded));
         }
 
         function moveCamera(next, animate = true, done = () => {}) {
-            cancelCameraMotion();
+            cancelAnimationFrame(animation);
             cancelAnimationFrame(renderFrame); renderFrame = 0;
-            if (!animate || animationsDisabled() || Object.entries(next).every(([key, value]) => camera[key] === value)) { Object.assign(camera, next); renderMap(); done(); return; }
-            // Snapshot transitions keep app content out of the per-frame layout path.
-            if (document.startViewTransition) {
-                const boxes = () => new Map([...windows.values()].map(win => [win.transitionName, win.el.getBoundingClientRect()]));
-                const motion = { from: { ...camera }, next, done, transition: null, animations: [], boxes: boxes(), scrollX: desktop.scrollLeft, scrollY: desktop.scrollTop };
-                cameraMotion = motion;
-                document.documentElement.classList.add('is-camera-transition'); desktop.classList.add('is-camera-animating');
-                motion.transition = document.startViewTransition(() => {
-                    if (cameraMotion !== motion) return;
-                    Object.assign(camera, next); renderMap(true);
-                    if (cameraMotion !== motion) return;
-                    motion.endBoxes = boxes();
-                    for (const win of windows.values()) win.el.inert = true;
-                    Object.assign(camera, motion.from);
-                });
-                motion.transition.ready.then(() => {
-                    if (cameraMotion !== motion) return;
-                    const layers = [];
-                    for (const [name, to] of motion.endBoxes) {
-                        const from = motion.boxes.get(name), pseudoElement = `::view-transition-group(${name})`;
-                        const style = getComputedStyle(document.documentElement, pseudoElement), width = parseFloat(style.width), height = parseFloat(style.height);
-                        if (!from || !(width > 0 && height > 0 && to.width > 0)) continue;
-                        const scale = Math.max(from.width / width, from.height / height);
-                        layers.push({ frames: [
-                            { transform: `translate(${from.x + (from.width - width * scale) / 2}px, ${from.y + (from.height - height * scale) / 2}px) scale(${scale})` },
-                            { transform: `translate(${to.x}px, ${to.y}px) scale(${to.width / width})` },
-                        ], pseudoElement });
-                    }
-                    for (const layer of layers) motion.animations.push(document.documentElement.animate(layer.frames, { duration: CAMERA_DURATION, easing: 'cubic-bezier(.333333, 0, .666667, 1)', pseudoElement: layer.pseudoElement }));
-                    const start = performance.now();
-                    const frame = now => {
-                        if (cameraMotion !== motion) return;
-                        const t = clamp((now - start) / CAMERA_DURATION, 0, 1), ease = smooth(t);
-                        for (const key of ['x', 'y', 'zoom', 'expansion']) camera[key] = mix(motion.from[key], next[key] ?? motion.from[key], ease);
-                        if (t < 1) animation = requestAnimationFrame(frame);
-                    };
-                    animation = requestAnimationFrame(frame);
-                }).catch(() => finishCameraMotion(motion));
-                motion.transition.finished.then(() => finishCameraMotion(motion), () => finishCameraMotion(motion));
-                return;
-            }
+            if (!animate || animationsDisabled()) { Object.assign(camera, next); renderMap(); done(); return; }
             const from = { ...camera }, start = performance.now();
             const frame = now => {
-                const t = animationsDisabled() ? 1 : clamp((now - start) / CAMERA_DURATION, 0, 1), ease = smooth(t);
+                const t = animationsDisabled() ? 1 : clamp((now - start) / 480, 0, 1), ease = smooth(t);
                 for (const key of ['x', 'y', 'zoom', 'expansion']) camera[key] = mix(from[key], next[key] ?? from[key], ease);
                 renderMap();
                 if (t < 1) animation = requestAnimationFrame(frame);
@@ -1308,7 +1202,7 @@ The page is rebuilt on every load by replaying all recorded run_js scripts, in o
         function zoomAt(zoom, x = desktop.clientWidth / 2, y = desktop.clientHeight / 2, defer = false) {
             if ((expanded && atHome) || camera.expansion !== Number(expanded)) return;
             atHome = false;
-            cancelCameraMotion();
+            cancelAnimationFrame(animation);
             const next = clamp(zoom, .12, FOCUS_END), dx = x - desktop.clientWidth / 2, dy = y - desktop.clientHeight / 2;
             const world = { x: camera.x + dx / camera.zoom, y: camera.y + dy / camera.zoom };
             if (camera.zoom < FOCUS_START && next >= FOCUS_START) {
@@ -1332,7 +1226,6 @@ The page is rebuilt on every load by replaying all recorded run_js scripts, in o
         }
 
         function syncWindows() {
-            while (cameraMotion) finishCameraMotion(cameraMotion);
             let changed = false, renamed = false, added = null;
             for (const [id, win] of windows) {
                 if ((!win.el.isConnected || win.el.id !== id) && !$(id)?.matches('.draggable.resizable')) { windows.delete(id); changed = true; }
@@ -1348,11 +1241,10 @@ The page is rebuilt on every load by replaying all recorded run_js scripts, in o
                     face.innerHTML = '<span class="tile-icon" aria-hidden="true"></span><span class="tile-title"></span>';
                     const mark = document.createElement('div');
                     mark.className = 'window-icon'; mark.setAttribute('aria-hidden', 'true');
-                    win = { el, face, mark, tone: win?.tone ?? nextTone++ % TILE_COLORS.length, title: '', transitionName: win?.transitionName ?? `ouroboros-window-${++transitionSerial}` };
+                    win = { el, face, mark, tone: win?.tone ?? nextTone++ % TILE_COLORS.length, title: '' };
                     windows.set(el.id, win);
                     if (el.parentElement !== layer) layer.append(el);
                     el.hidden = false; el.tabIndex = -1; el.classList.add('desktop-window'); el.setAttribute('role', 'region');
-                    el.style.viewTransitionName = win.transitionName;
                     header.querySelector('.window-controls')?.remove();
                     header.querySelector(':scope > .window-icon')?.remove(); header.prepend(mark);
                     header.insertAdjacentHTML('beforeend', '<div class="window-controls"><button type="button" data-window-action="home" aria-label="All apps" title="All apps"></button></div>');
@@ -1369,10 +1261,6 @@ The page is rebuilt on every load by replaying all recorded run_js scripts, in o
                 if (win.icon !== icon) { win.icon = icon; drawIcon(win.face.querySelector('.tile-icon'), icon); drawIcon(win.mark, icon); }
                 const sizeKey = [el.dataset.width, el.dataset.height, el.dataset.aspectRatio].join('|');
                 if (win.sizeKey !== sizeKey) { win.sizeKey = sizeKey; layoutCache = null; }
-                win.label = win.face.querySelector('.tile-title');
-                win.faceIcon = win.face.querySelector('.tile-icon');
-                win.interactive = win.detail = null; // Newly inserted content must receive the current presentation state.
-                for (const name of ['--detail', '--radius', '--label-size', '--icon-size']) el.style.removeProperty(name);
                 Object.assign(el.style, { position: 'absolute', left: '0px', top: '0px', margin: '0px' });
                 el.style.setProperty('--tile', TILE_COLORS[win.tone][0]); el.style.setProperty('--tint', TILE_COLORS[win.tone][1]);
                 win.face.disabled = busy || importing;
@@ -1421,7 +1309,7 @@ The page is rebuilt on every load by replaying all recorded run_js scripts, in o
             syncWindows();
             let drag = null, touch = null, suppressClick = false;
             const point = e => { const box = desktop.getBoundingClientRect(); return { x: e.clientX - box.left, y: e.clientY - box.top }; };
-            const pan = (dx, dy) => { cancelCameraMotion(); atHome = false; camera.x -= dx / camera.zoom; camera.y -= dy / camera.zoom; queueRender(); };
+            const pan = (dx, dy) => { cancelAnimationFrame(animation); atHome = false; camera.x -= dx / camera.zoom; camera.y -= dy / camera.zoom; queueRender(); };
             const canExplore = () => !expanded && camera.expansion === 0 && focusProgress() <= .95;
             desktop.addEventListener('pointerdown', e => {
                 if (e.pointerType === 'touch' || e.button !== 0 || !canExplore()) return;
@@ -1466,7 +1354,7 @@ The page is rebuilt on every load by replaying all recorded run_js scripts, in o
                 if (expanded && atHome) { if (e.touches.length > 1 && e.cancelable) e.preventDefault(); return; }
                 if (e.touches.length < 2 && (!canExplore() || !desktop.contains(e.target))) return;
                 if (e.cancelable) e.preventDefault();
-                if (e.touches.length > 1) cancelCameraMotion();
+                cancelAnimationFrame(animation);
                 const points = touchPoints(e);
                 touch = { p: midpoint(points), distance: distance(points), traveled: 0, moved: e.touches.length > 1, target: e.target.closest('.tile-face') };
             }, { passive: false, capture: true });
@@ -1476,9 +1364,9 @@ The page is rebuilt on every load by replaying all recorded run_js scripts, in o
                 const points = touchPoints(e), p = midpoint(points), d = distance(points);
                 const dx = p.x - touch.p.x, dy = p.y - touch.p.y;
                 if (d && touch.distance) zoomAt(camera.zoom * d / touch.distance, touch.p.x, touch.p.y, true);
+                if (canExplore()) pan(dx, dy);
                 touch.traveled += Math.hypot(dx, dy);
                 touch.moved ||= touch.traveled > 4 || d > 0;
-                if (touch.moved && canExplore()) pan(dx, dy);
                 Object.assign(touch, { p, distance: d });
             }, { passive: false, capture: true });
             document.addEventListener('touchend', e => {
@@ -1492,14 +1380,6 @@ The page is rebuilt on every load by replaying all recorded run_js scripts, in o
                 if (!atHome) returnHome();
                 else switchView();
             };
-            // Snapshot capture briefly retargets clicks to html; keep the navigation button responsive.
-            document.addEventListener('click', e => {
-                if (!cameraMotion || !e.isTrusted || e.target !== document.documentElement) return;
-                const button = $('map-home'), box = button.getBoundingClientRect();
-                if (!button.disabled && e.clientX >= box.left && e.clientX <= box.right && e.clientY >= box.top && e.clientY <= box.bottom) {
-                    e.preventDefault(); button.click();
-                }
-            }, true);
             addEventListener('keydown', e => {
                 if (e.defaultPrevented || e.isComposing || e.ctrlKey || e.metaKey || e.altKey) return;
                 if (e.key === 'Escape') { e.preventDefault(); returnHome(); }
@@ -1509,10 +1389,7 @@ The page is rebuilt on every load by replaying all recorded run_js scripts, in o
                     if (e.key === '0') returnHome();
                 }
             });
-            addEventListener('resize', () => {
-                if (cameraMotion) finishCameraMotion(cameraMotion);
-                !expanded && atHome ? overview(false) : renderMap();
-            });
+            addEventListener('resize', () => !expanded && atHome ? overview(false) : renderMap());
             reducedMotion.addEventListener('change', renderMap);
         }
 
@@ -1724,14 +1601,11 @@ The page is rebuilt on every load by replaying all recorded run_js scripts, in o
                 }
             }
             const setupFailures = await replay();
-            if (verification) { busy = false; await finishVerification(setupFailures); return; }
-            await new Promise(requestAnimationFrame);
-            syncWindows();
             busy = false;
+            if (verification) { await finishVerification(setupFailures); return; }
             overview(false);
             setRunning(false);
             desktop.removeAttribute('inert'); desktop.removeAttribute('aria-busy');
-            desktop.classList.add('is-ready');
             document.body.classList.remove('restoring');
             els.log.scrollTop = els.log.scrollHeight;
             pruneImages().catch(() => {});
