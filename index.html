@@ -385,13 +385,19 @@ The page is rebuilt on every load by replaying all recorded run_js scripts, in o
 
     <!-- MAIN APPLICATION LOGIC -->
     <script type="module">
-        // --- CONSTANTS ---
+        // --- CONSTANTS & HELPERS ---
         const MAX_STEPS = 40;
         const MAX_IMAGES = 4, MAX_IMAGE_BYTES = 512 * 1024, MAX_IMAGE_SIDE = 2048;
         const SETTINGS_KEY = 'ouroboros:settings';
         const HARNESS = '#ouroboros-core, #ouroboros-settings, #map-toolbar, #desktop-wallpaper, #ouroboros-system_prompt, #ouroboros-state';
         const AsyncFunction = Object.getPrototypeOf(async function () {}).constructor;
         const $ = id => document.getElementById(id);
+        const esc = s => String(s).replace(/[&<>]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]));
+        const clip = (s, n) => s.length > n ? s.slice(0, n) + `\n… [${s.length - n} more chars]` : s;
+        const show = v => { try { return v === undefined ? 'ok' : typeof v === 'string' ? v : (JSON.stringify(v, null, 1) ?? String(v)); } catch { return String(v); } };
+        const copyData = value => JSON.parse(JSON.stringify(value));
+        const fingerprint = text => [...text].reduce((hash, char) => Math.imul(hash ^ char.charCodeAt(0), 16777619) >>> 0, 2166136261).toString(16);
+        const drawIcon = (target, name) => target.replaceChildren(lucide.createElement(lucide.icons[name], { class: 'ui-icon', 'stroke-width': 1.8, 'aria-hidden': 'true', focusable: 'false', preserveAspectRatio: 'xMidYMid meet' }));
 
         // --- STATE ---
         // Settings and the pre-import backup stay in the browser. Exports carry history and the code/layout/data journal.
@@ -417,6 +423,18 @@ The page is rebuilt on every load by replaying all recorded run_js scripts, in o
         const load = key => { try { return JSON.parse(localStorage.getItem(key)); } catch { return null; } };
         const storedActivity = load(TRACE_KEY);
         const activity = Array.isArray(storedActivity) ? storedActivity.filter(t => t && Number.isFinite(t.task) && Array.isArray(t.calls) && Array.isArray(t.requests)).slice(-10) : [];
+        // Diagnostic history is bounded and stays on this device, outside exported workspaces.
+        let traceSaveFailed = false;
+        function saveActivity() {
+            activity.splice(0, Math.max(0, activity.length - 10));
+            while (JSON.stringify(activity).length > 200000) {
+                if (activity.length > 1) activity.shift();
+                else if (activity[0]?.calls.length) { activity[0].calls.shift(); activity[0].droppedCalls = (activity[0].droppedCalls || 0) + 1; }
+                else break;
+            }
+            try { localStorage.setItem(TRACE_KEY, JSON.stringify(activity)); traceSaveFailed = false; }
+            catch (e) { if (!traceSaveFailed) log('error', `Could not save activity history: ${e.message}`); traceSaveFailed = true; }
+        }
         const storedSettings = load(SETTINGS_KEY);
         const settings = {
             apiKey: storedSettings?.apiKey ?? '',
@@ -425,6 +443,12 @@ The page is rebuilt on every load by replaying all recorded run_js scripts, in o
             disableAnimations: verification ? true : storedSettings?.disableAnimations ?? false,
             wallpaper: document.documentElement.dataset.wallpaper,
             usage: storedSettings?.usage ?? { input: 0, output: 0, responses: 0, lastTask: null },
+        };
+        // Anything shown or stored about a task has the key removed first.
+        const redact = text => {
+            let value = String(text).replace(/\bsk-[A-Za-z0-9_-]{16,}/g, '[redacted key]').replace(/Bearer\s+[A-Za-z0-9._-]+/gi, 'Bearer [redacted]');
+            if (settings.apiKey) value = value.split(settings.apiKey).join('[redacted key]');
+            return value;
         };
         const saved = load(CONTENT_KEY) ?? embedded;
         const state = {
@@ -461,7 +485,6 @@ The page is rebuilt on every load by replaying all recorded run_js scripts, in o
         addEventListener('unhandledrejection', e => noteError(`Unhandled rejection: ${e.reason?.message || e.reason}`));
 
         // Data is restored before scripts run; replayed setup code cannot overwrite saved user content.
-        const copyData = value => JSON.parse(JSON.stringify(value));
         window.ouroboros = Object.freeze({
             getState(id, fallback = {}) { return copyData(tileData.has(id) ? tileData.get(id) : fallback); },
             setState(id, value) {
@@ -607,7 +630,8 @@ The page is rebuilt on every load by replaying all recorded run_js scripts, in o
             return { role, content: parts };
         }
 
-        // --- DOM ACCESS ---
+        // --- TOOLS ---
+        // Implementations first: DOM reading, saved app sources and the isolated verification copy. The table the model calls follows.
         function htmlOf(el) {
             const clone = el.cloneNode(true);
             clone.querySelectorAll(HARNESS).forEach(n => n.replaceChildren(document.createComment(' harness, omitted ')));
@@ -633,28 +657,7 @@ The page is rebuilt on every load by replaying all recorded run_js scripts, in o
             return lines;
         }
 
-        const clip = (s, n) => s.length > n ? s.slice(0, n) + `\n… [${s.length - n} more chars]` : s;
-        const show = v => { try { return v === undefined ? 'ok' : typeof v === 'string' ? v : (JSON.stringify(v, null, 1) ?? String(v)); } catch { return String(v); } };
         const runJs = async code => show(await new AsyncFunction(code)());
-        const redact = text => {
-            let value = String(text).replace(/\bsk-[A-Za-z0-9_-]{16,}/g, '[redacted key]').replace(/Bearer\s+[A-Za-z0-9._-]+/gi, 'Bearer [redacted]');
-            if (settings.apiKey) value = value.split(settings.apiKey).join('[redacted key]');
-            return value;
-        };
-        const fingerprint = text => [...text].reduce((hash, char) => Math.imul(hash ^ char.charCodeAt(0), 16777619) >>> 0, 2166136261).toString(16);
-
-        // Diagnostic history is bounded and stays on this device, outside exported workspaces.
-        let traceSaveFailed = false;
-        function saveActivity() {
-            activity.splice(0, Math.max(0, activity.length - 10));
-            while (JSON.stringify(activity).length > 200000) {
-                if (activity.length > 1) activity.shift();
-                else if (activity[0]?.calls.length) { activity[0].calls.shift(); activity[0].droppedCalls = (activity[0].droppedCalls || 0) + 1; }
-                else break;
-            }
-            try { localStorage.setItem(TRACE_KEY, JSON.stringify(activity)); traceSaveFailed = false; }
-            catch (e) { if (!traceSaveFailed) log('error', `Could not save activity history: ${e.message}`); traceSaveFailed = true; }
-        }
 
         function appSources(appId) {
             return state.mutations.flatMap((m, index) => typeof m.code === 'string' && !m.test && (m.apps ? m.apps.includes(appId) : m.code.includes(appId))
@@ -756,7 +759,6 @@ The page is rebuilt on every load by replaying all recorded run_js scripts, in o
             parent.postMessage({ type: 'ouroboros-verification', nonce: verification.nonce, result }, '*');
         }
 
-        // --- TOOLS ---
         const CODE_SCHEMA = { type: 'object', properties: { code: { type: 'string', description: 'Body of an async function' } }, required: ['code'], additionalProperties: false };
         const APP_IDS = { type: 'array', items: { type: 'string' }, minItems: 1, description: 'Stable IDs of the generated apps involved. Include every app this operation changes or tests.' };
         const TOOLS = [
@@ -1105,10 +1107,6 @@ The page is rebuilt on every load by replaying all recorded run_js scripts, in o
         const queueRender = () => { if (!renderFrame) renderFrame = requestAnimationFrame(renderMap); };
         const updateValue = (target, key, value) => { if (target[key] !== value) target[key] = value; };
         const settleReveal = () => { for (const reveal of revealAnimations) reveal.finish(); revealAnimations = []; };
-
-        function drawIcon(target, name) {
-            target.replaceChildren(lucide.createElement(lucide.icons[name], { class: 'ui-icon', 'stroke-width': 1.8, 'aria-hidden': 'true', focusable: 'false', preserveAspectRatio: 'xMidYMid meet' }));
-        }
 
         function appSize(el, width, height, padding = 24) {
             // Centered apps clear the floating toolbar; the canvas still fills the viewport.
@@ -1551,9 +1549,26 @@ The page is rebuilt on every load by replaying all recorded run_js scripts, in o
             reducedMotion.addEventListener('change', renderMap);
         }
 
+        // Windows that apps add, rename or remove outside a tool call are picked up on the next frame.
+        function observeWindows() {
+            let queued = false;
+            new MutationObserver(mutations => {
+                const relevant = mutations.some(m => {
+                    const target = m.target.nodeType === 1 ? m.target : m.target.parentElement;
+                    if (!target) return false;
+                    if (m.type === 'attributes') return target.matches('.draggable.resizable');
+                    if (target.closest(HARNESS)) return false;
+                    if (target.closest('.window-header') && !target.closest('.window-controls')) return true;
+                    return m.type === 'childList' && (target.matches('.draggable.resizable') || [...m.addedNodes, ...m.removedNodes].some(n =>
+                        n.nodeType === 1 && (n.matches('.draggable.resizable') || n.querySelector('.draggable.resizable'))));
+                });
+                if (!relevant) return;
+                if (!queued) { queued = true; requestAnimationFrame(() => { queued = false; syncWindows(); }); }
+            }).observe(document.body, { childList: true, subtree: true, attributes: true, attributeFilter: ['id', 'data-window-title', 'data-window-icon', 'data-width', 'data-height', 'data-aspect-ratio'], characterData: true });
+        }
+
         // --- UI ---
         const els = { log: $('activity-log'), prompt: $('user-prompt'), btn: $('execute-btn'), status: $('task-status'), undo: $('undo-btn') };
-        const esc = s => String(s).replace(/[&<>]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]));
         const nearBottom = () => els.log.scrollHeight - els.log.scrollTop - els.log.clientHeight < 48;
         const markdown = window.markdownit?.({ html: false, linkify: true, breaks: true });
         if (markdown) {
@@ -1799,21 +1814,7 @@ The page is rebuilt on every load by replaying all recorded run_js scripts, in o
                 return [el.animate([{ opacity: 0 }, { opacity: 1 }], timing), el.animate([{ transform: `translate(${c}px, ${c}px) scale(.88) translate(${-c}px, ${-c}px)` }, { transform: 'none' }], { ...timing, composite: 'add' })];
             });
             pruneImages().catch(() => {});
-
-            let queued = false;
-            new MutationObserver(mutations => {
-                const relevant = mutations.some(m => {
-                    const target = m.target.nodeType === 1 ? m.target : m.target.parentElement;
-                    if (!target) return false;
-                    if (m.type === 'attributes') return target.matches('.draggable.resizable');
-                    if (target.closest(HARNESS)) return false;
-                    if (target.closest('.window-header') && !target.closest('.window-controls')) return true;
-                    return m.type === 'childList' && (target.matches('.draggable.resizable') || [...m.addedNodes, ...m.removedNodes].some(n =>
-                        n.nodeType === 1 && (n.matches('.draggable.resizable') || n.querySelector('.draggable.resizable'))));
-                });
-                if (!relevant) return;
-                if (!queued) { queued = true; requestAnimationFrame(() => { queued = false; syncWindows(); }); }
-            }).observe(document.body, { childList: true, subtree: true, attributes: true, attributeFilter: ['id', 'data-window-title', 'data-window-icon', 'data-width', 'data-height', 'data-aspect-ratio'], characterData: true });
+            observeWindows();
         }
 
         init();
