@@ -34,7 +34,7 @@
         #desktop.is-expanded { overflow: auto; cursor: default; }
         #desktop.is-switching { overflow: hidden; pointer-events: none; }
         #desktop.is-expanded.has-overlay { overflow: hidden; }
-        #window-layer > .desktop-window { --tile: #24695b; --tint: #edf5f1; --ink: #1d1d1f; --muted: #6e6e73; --line: #e5e5ea; --surface: #f5f5f7; --accent: var(--tile); position: absolute; left: 0; top: 0; display: flex; flex-direction: column; box-sizing: border-box; overflow: hidden; transform-origin: 0 0; color: var(--ink); background: transparent; font-size: 14px; line-height: 1.5; border: 1px solid #ffffffb3; border-radius: 50% !important; box-shadow: 0 2px 6px #18233305, 0 12px 36px #1823330b, 0 0 0 1px #18233308; transition: box-shadow .28s ease; }
+        #window-layer > .desktop-window { --ink: #1d1d1f; --muted: #6e6e73; --line: #e5e5ea; --surface: #f5f5f7; --accent: var(--tile); position: absolute; left: 0; top: 0; display: flex; flex-direction: column; box-sizing: border-box; overflow: hidden; transform-origin: 0 0; color: var(--ink); background: transparent; font-size: 14px; line-height: 1.5; border: 1px solid #ffffffb3; border-radius: 50% !important; box-shadow: 0 2px 6px #18233305, 0 12px 36px #1823330b, 0 0 0 1px #18233308; transition: box-shadow .28s ease; }
         #window-layer > .desktop-window > :not(.tile-face) { opacity: 0; }
         #window-layer > .desktop-window:focus { outline: none; }
         #window-layer > .desktop-window.is-focused { box-shadow: 0 4px 12px #18233306, 0 24px 80px #18233318, 0 0 0 1px #18233308; }
@@ -46,16 +46,14 @@
         #window-layer .window-controls button { display: grid; place-items: center; flex: none; width: 32px; height: 32px; padding: 0; aspect-ratio: 1; border-radius: 50%; color: var(--muted); }
         #window-layer .window-controls button:hover { color: var(--ink); background: var(--surface); }
         #window-layer .tile-face { position: absolute; inset: 0; z-index: 2; display: grid; align-content: center; justify-items: center; gap: 12px; width: 100%; border: 1px solid #ffffffbf; border-radius: inherit; color: var(--ink); background: linear-gradient(145deg, #ffffffe0, #ffffff80 48%, color-mix(in srgb, var(--tint) 82%, transparent)); backdrop-filter: blur(14px) saturate(1.15); box-shadow: inset 1px 1px 1px #ffffffcc, inset -1px -1px 1px #ffffff66; opacity: 1; cursor: pointer; }
-        #window-layer .tile-face[hidden] { display: none; }
         #window-layer .tile-face:focus-visible { outline: 3px solid var(--accent); outline-offset: -8px; }
         #window-layer .tile-icon { width: 68px; height: 68px; color: var(--accent); }
         .no-animations #window-layer .tile-face { backdrop-filter: none; background: var(--tint); }
-        @media (pointer: coarse) { #window-layer > .desktop-window { transition: none; } }
         .ui-icon { display: block; width: 20px; height: 20px; flex: none; }
         #window-layer .window-controls .ui-icon { min-width: 20px; min-height: 20px; aspect-ratio: 1; }
         #window-layer .tile-icon .ui-icon { width: 100%; height: 100%; stroke-width: 1.75; }
         #window-layer .tile-title { max-width: 78%; font-size: 18px; font-weight: 500; line-height: 1.3; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
-        #window-layer .tile-title[hidden] { display: none !important; }
+        #window-layer :is(.tile-face, .tile-title)[hidden] { display: none; }
         #map-toolbar { position: fixed; inset: 0 0 auto; z-index: 10; display: flex; align-items: center; justify-content: space-between; height: 64px; padding: 0 24px; gap: 12px; }
         #map-toolbar button { min-width: 44px; min-height: 44px; border: 1px solid #ffffffd9; border-radius: 999px; color: #414b5a; background: #ffffffc7; backdrop-filter: blur(12px) saturate(1.2); box-shadow: 0 2px 12px #18233308, inset 0 1px 0 #fff; transition: background .15s, color .15s; }
         #map-toolbar button:hover { color: #202632; background: #fffffff0; }
@@ -64,10 +62,6 @@
         @media (prefers-reduced-transparency: reduce), (prefers-contrast: more) { #map-toolbar button, #window-layer .tile-face { backdrop-filter: none; background: #fff; border-color: #a1a8b2; } }
         #map-home { display: flex; align-items: center; gap: 10px; padding: 0 12px; font-size: 16px; font-weight: 500; letter-spacing: -.03em; }
         #map-home .ui-icon { width: 28px; height: 28px; }
-        @media (max-width: 599px) {
-            #map-toolbar { height: 60px; padding: 0 8px; }
-            #map-home { font-size: 14px; }
-        }
         .desktop-window button, .desktop-window summary { touch-action: manipulation; }
         .desktop-window button:disabled { opacity: .45; cursor: default; }
         .desktop-window :is(button, summary, input, textarea, select) { border-radius: 10px; box-shadow: none; }
@@ -184,9 +178,20 @@
         .core-panel #image-status { margin-top: 8px; color: #b44443; font-size: 12px; }
         .core-panel .core-meta { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 4px 12px; margin-top: 9px; color: var(--muted); font-size: 11px; }
         .core-panel #model-btn { max-width: 190px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-        @media (max-width: 599px) { #window-layer > .desktop-window { font-size: 15px; } .desktop-window .ui-body, .core-panel #activity-log { padding: 20px; } .desktop-window .ui-label, .desktop-window .ui-caption { font-size: 13px; } }
-        @media (pointer: coarse) { .desktop-window button, .desktop-window summary, .desktop-window .ui-button, .desktop-window .ui-segmented > button { min-height: 44px; } #window-layer .window-controls button, .desktop-window .ui-icon-button { width: 44px; height: 44px; } .desktop-window .ui-field, .core-panel #user-prompt { font-size: 16px; } }
-        @media (pointer: coarse) { .core-panel .image-remove { width: 44px; height: 44px; min-height: 44px; } }
+        @media (max-width: 599px) {
+            #map-toolbar { height: 60px; padding: 0 8px; }
+            #map-home { font-size: 14px; }
+            #window-layer > .desktop-window { font-size: 15px; }
+            .desktop-window .ui-body, .core-panel #activity-log { padding: 20px; }
+            .desktop-window .ui-label, .desktop-window .ui-caption { font-size: 13px; }
+        }
+        @media (pointer: coarse) {
+            #window-layer > .desktop-window { transition: none; }
+            .desktop-window button, .desktop-window summary, .desktop-window .ui-button, .desktop-window .ui-segmented > button { min-height: 44px; }
+            #window-layer .window-controls button, .desktop-window .ui-icon-button { width: 44px; height: 44px; }
+            .core-panel .image-remove { width: 44px; height: 44px; min-height: 44px; }
+            .desktop-window .ui-field, .core-panel #user-prompt { font-size: 16px; }
+        }
     </style>
 </head>
 <body class="restoring overflow-hidden relative w-screen h-screen">
@@ -243,7 +248,7 @@
     <!-- GENESIS WINDOW: CORE -->
     <div id="ouroboros-core" class="draggable resizable core-panel select-none" data-window-title="Ouroboros" data-window-icon="Infinity" data-width="520" data-height="640">
         <!-- Header -->
-        <div class="window-header cursor-move px-4 py-3 flex shrink-0 justify-between items-center gap-2">
+        <div class="window-header">
             <h1>Ouroboros</h1>
         </div>
 
@@ -283,10 +288,6 @@
                 <h3 id="appearance-title">Appearance</h3>
                 <fieldset class="wallpaper-options">
                     <legend>Background</legend>
-                    <label class="wallpaper-choice"><input type="radio" name="wallpaper" value="flow"><span class="wallpaper-preview"><svg viewBox="0 0 1600 1000" preserveAspectRatio="xMidYMid slice" aria-hidden="true"><use href="#wallpaper-flow" width="1600" height="1000"/></svg></span><span>Flow</span></label>
-                    <label class="wallpaper-choice"><input type="radio" name="wallpaper" value="glow"><span class="wallpaper-preview"><svg viewBox="0 0 1600 1000" preserveAspectRatio="xMidYMid slice" aria-hidden="true"><use href="#wallpaper-glow" width="1600" height="1000"/></svg></span><span>Glow</span></label>
-                    <label class="wallpaper-choice"><input type="radio" name="wallpaper" value="fold"><span class="wallpaper-preview"><svg viewBox="0 0 1600 1000" preserveAspectRatio="xMidYMid slice" aria-hidden="true"><use href="#wallpaper-fold" width="1600" height="1000"/></svg></span><span>Fold</span></label>
-                    <label class="wallpaper-choice"><input type="radio" name="wallpaper" value="arc"><span class="wallpaper-preview"><svg viewBox="0 0 1600 1000" preserveAspectRatio="xMidYMid slice" aria-hidden="true"><use href="#wallpaper-arc" width="1600" height="1000"/></svg></span><span>Arc</span></label>
                 </fieldset>
                 <label class="flex items-center justify-between gap-4 min-h-11 cursor-pointer" for="disable-animations">
                     <span>Disable animations</span><input id="disable-animations" type="checkbox" class="w-4 h-4 shrink-0 accent-[var(--tile)]">
@@ -1717,6 +1718,9 @@ The page is rebuilt on every load by replaying all recorded run_js scripts, in o
         function bindSettings() {
             const fields = { apiKey: 'api-key', apiBase: 'api-base', model: 'model' };
             for (const [key, id] of Object.entries(fields)) $(id).value = settings[key];
+            // One choice per wallpaper symbol, previewed with the symbol itself.
+            const wallpapers = [...document.querySelectorAll('#desktop-wallpaper symbol')].map(symbol => symbol.id.replace('wallpaper-', ''));
+            document.querySelector('.wallpaper-options').insertAdjacentHTML('beforeend', wallpapers.map(name => `<label class="wallpaper-choice"><input type="radio" name="wallpaper" value="${name}"><span class="wallpaper-preview"><svg viewBox="0 0 1600 1000" preserveAspectRatio="xMidYMid slice" aria-hidden="true"><use href="#wallpaper-${name}" width="1600" height="1000"/></svg></span><span>${name[0].toUpperCase() + name.slice(1)}</span></label>`).join(''));
             for (const option of document.querySelectorAll('input[name="wallpaper"]')) {
                 option.checked = option.value === settings.wallpaper;
                 option.onchange = () => {
