@@ -5,14 +5,27 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Ouroboros</title>
     <link rel="icon" href="data:,">
-    <script src="https://cdn.tailwindcss.com"></script>
-    <script src="https://cdn.jsdelivr.net/npm/lucide@1.47.0/dist/umd/lucide.min.js"></script>
+    <link rel="expect" href="#desktop-wallpaper" blocking="render">
+    <script id="ouroboros-appearance">
+        {
+            let wallpaper = 'flow';
+            try {
+                if (!document.documentElement.hasAttribute('data-verification')) {
+                    const saved = JSON.parse(localStorage.getItem('ouroboros:settings'))?.wallpaper;
+                    if (['flow', 'glow', 'fold', 'arc'].includes(saved)) wallpaper = saved;
+                }
+            } catch {}
+            document.documentElement.dataset.wallpaper = wallpaper;
+        }
+    </script>
     <style>
         html, body { touch-action: pan-x pan-y; overscroll-behavior: none; }
         .no-animations *, .no-animations *::before, .no-animations *::after { animation: none !important; transition: none !important; scroll-behavior: auto !important; }
         body { margin: 0; background: #f2f4f8; color: #1d1d1f; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; -webkit-font-smoothing: antialiased; }
         body.restoring > :not(#map-toolbar):not(#desktop-wallpaper) { visibility: hidden !important; opacity: 0 !important; }
         #desktop-wallpaper { position: fixed; inset: 0; width: 100%; height: 100%; pointer-events: none; }
+        #desktop-wallpaper > use { display: none; }
+        html[data-wallpaper="flow"] #desktop-wallpaper > [href="#wallpaper-flow"], html[data-wallpaper="glow"] #desktop-wallpaper > [href="#wallpaper-glow"], html[data-wallpaper="fold"] #desktop-wallpaper > [href="#wallpaper-fold"], html[data-wallpaper="arc"] #desktop-wallpaper > [href="#wallpaper-arc"] { display: inline; }
         #desktop { position: fixed; inset: 0; overflow: hidden; isolation: isolate; overscroll-behavior: contain; scrollbar-gutter: stable; cursor: grab; }
         #desktop, #desktop * { touch-action: none; }
         #desktop.has-focus, #desktop.has-focus *, #desktop.is-expanded, #desktop.is-expanded * { touch-action: pan-x pan-y; }
@@ -214,9 +227,14 @@
                 <circle cx="1410" cy="1050" r="590" fill="url(#arc-rim)"/>
             </symbol>
         </defs>
-        <use id="wallpaper-art" width="1600" height="1000"/>
+        <use href="#wallpaper-flow" width="1600" height="1000"/>
+        <use href="#wallpaper-glow" width="1600" height="1000"/>
+        <use href="#wallpaper-fold" width="1600" height="1000"/>
+        <use href="#wallpaper-arc" width="1600" height="1000"/>
     </svg>
 
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/lucide@1.47.0/dist/umd/lucide.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/markdown-it@15.0.2/dist/browser/markdown-it.umd.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/katex@0.18.7/dist/katex.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/@mdit/plugin-tex@1.1.1/dist/cdn.umd.js"></script>
@@ -376,7 +394,7 @@ The page is rebuilt on every load by replaying all recorded run_js scripts, in o
         // Settings and the pre-import backup stay in the browser. Exports carry history and the code/layout/data journal.
         // Each exported snapshot continues in its own local storage slot.
         // The pristine page is captured before any mutation is replayed; export = pristine + content.
-        const pristine = '<!DOCTYPE html>\n' + document.documentElement.outerHTML;
+        const pristine = '<!DOCTYPE html>\n' + document.documentElement.outerHTML.replace(/(<html\b[^>]*?) data-wallpaper="[^"]*"/, '$1');
         const embedded = JSON.parse($('ouroboros-state').textContent);
         const verification = embedded.verification ?? null;
         if (verification) {
@@ -396,10 +414,9 @@ The page is rebuilt on every load by replaying all recorded run_js scripts, in o
             apiBase: storedSettings?.apiBase || $('api-base').defaultValue,
             model: storedSettings?.model || $('model').defaultValue,
             disableAnimations: verification ? true : storedSettings?.disableAnimations ?? false,
-            wallpaper: ['flow', 'glow', 'fold', 'arc'].includes(storedSettings?.wallpaper) ? storedSettings.wallpaper : 'flow',
+            wallpaper: document.documentElement.dataset.wallpaper,
             usage: storedSettings?.usage ?? { input: 0, output: 0, responses: 0, lastTask: null },
         };
-        $('wallpaper-art').setAttribute('href', '#wallpaper-' + settings.wallpaper);
         const saved = load(CONTENT_KEY) ?? embedded;
         const state = {
             history: [...saved.history],
@@ -687,7 +704,8 @@ The page is rebuilt on every load by replaying all recorded run_js scripts, in o
                 const json = value => JSON.stringify(value).replace(/</g, '\\u003c');
                 const script = source => '<script>(0,eval)(' + json(source) + ');<' + '/script>';
                 const policy = "default-src 'none'; script-src 'unsafe-inline' 'unsafe-eval'; style-src 'unsafe-inline'; img-src data:; font-src data:; frame-src about:; form-action 'none'; base-uri 'none'";
-                let html = pristine.replace('<head>', `<head><meta http-equiv="Content-Security-Policy" content="${policy}">`)
+                let html = pristine.replace('<html ', '<html data-verification ')
+                    .replace('<head>', `<head><meta http-equiv="Content-Security-Policy" content="${policy}">`)
                     .replace(/(<script type="application\/json" id="ouroboros-state">)[\s\S]*?(<\/script>)/, (_, open, close) => open + json(snapshot) + close);
                 const css = [...document.querySelectorAll('style')].filter(el => /tailwindcss|--tw-/.test(el.textContent)).map(el => el.textContent).join('\n');
                 html = html.replace('<script src="https://cdn.tailwindcss.com"><' + '/script>', () => script(`const style=document.createElement('style');style.textContent=${json(css)};document.head.append(style);`));
@@ -1580,7 +1598,7 @@ The page is rebuilt on every load by replaying all recorded run_js scripts, in o
                 option.checked = option.value === settings.wallpaper;
                 option.onchange = () => {
                     settings.wallpaper = option.value;
-                    $('wallpaper-art').setAttribute('href', '#wallpaper-' + option.value);
+                    document.documentElement.dataset.wallpaper = option.value;
                     try { saveSettings(); }
                     catch (e) { log('error', `Could not save background: ${e.message}`); }
                 };
