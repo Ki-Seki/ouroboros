@@ -1216,9 +1216,13 @@ The page is rebuilt on every load by replaying all recorded run_js scripts, in o
                     }
                 }
             }
-            // Lite devices show no app content at all while the camera is in motion, whether from a move or a gesture.
-            if (hide) for (const win of windows.values()) for (const child of content(win)) if (!hiddenContent.has(child)) {
-                remember(child); child.style.setProperty('visibility', 'hidden', 'important'); hiddenContent.add(child);
+            // Lite devices show no app content at all while the camera is in motion, whether from a move or a gesture; the glass face stands in.
+            if (hide) for (const win of windows.values()) {
+                for (const child of content(win)) if (!hiddenContent.has(child)) { remember(child); child.style.setProperty('visibility', 'hidden', 'important'); hiddenContent.add(child); }
+                if (!win.placeholder) {
+                    win.placeholder = true; win.detail = null;
+                    if (+win.face.style.opacity < 1 && !animationsDisabled()) win.face.animate([{ opacity: 0 }, { opacity: 1 }], { duration: 120, easing: 'ease-out' });
+                }
             }
             if (targets.length || hide) holdFrozen();
         }
@@ -1230,12 +1234,20 @@ The page is rebuilt on every load by replaying all recorded run_js scripts, in o
                 if (value) child.style.setProperty(name, value, priority); else child.style.removeProperty(name);
             }
             frozen.clear(); frozenWindows.clear();
-            // Content that was skipped during the move fades in where it is now visible.
+            // Content that was skipped during the move fades in where it is now visible, while the glass placeholder fades out.
             for (const child of hiddenContent) {
                 const opacity = child.isConnected ? getComputedStyle(child).opacity : '0';
                 if (+opacity > 0 && !animationsDisabled()) child.animate([{ opacity: 0 }, { opacity }], { duration: 160, easing: 'ease-out' });
             }
             hiddenContent.clear();
+            for (const win of windows.values()) if (win.placeholder) {
+                const settle = () => { if (win.placeholder && ![...win.el.children].some(child => hiddenContent.has(child))) { win.placeholder = false; win.detail = null; win.face.style.pointerEvents = ''; renderMap(); } };
+                if (animationsDisabled()) { settle(); continue; }
+                const shown = win.detail ?? 0;
+                win.face.style.pointerEvents = 'none';
+                win.el.animate([{ backgroundColor: 'rgb(255 255 255 / 0)' }, { backgroundColor: `rgb(255 255 255 / ${shown})` }], { duration: 160, easing: 'ease-out' });
+                win.face.animate([{ opacity: 1 }, { opacity: String(1 - shown) }], { duration: 160, easing: 'ease-out' }).finished.then(settle, settle);
+            }
         }
 
         function renderMap() {
@@ -1264,18 +1276,20 @@ The page is rebuilt on every load by replaying all recorded run_js scripts, in o
                 const focused = selected && focus > .95 && !switching;
                 const interactive = !switching && (focused || (expanded && focus === 0));
                 Object.assign(win.el.style, { width: `${box.w}px`, height: `${box.h}px`, transform: `translate(${box.x}px, ${box.y}px) scale(${box.scale})`, zIndex: selected ? '3' : '1', filter: selected || noAnimations || coarsePointer.matches || lite || !focus ? 'none' : `blur(${focus * 7 / box.scale}px)`, opacity: selected ? '1' : String(1 - focus * (coarsePointer.matches ? 1 : .87)) });
-                if (win.detail !== shown) {
+                // While lite mode hides a window's content, its glass face stands in for it over a transparent body.
+                const glass = win.placeholder ? 1 : 1 - shown;
+                if (win.detail !== shown || win.glass !== glass) {
                     // Presentation is written on the window, its tile face and its direct children; inherited variables would restyle every app node each frame.
-                    win.el.style.backgroundColor = `rgb(255 255 255 / ${shown})`;
+                    win.el.style.backgroundColor = `rgb(255 255 255 / ${win.placeholder ? 0 : shown})`;
                     win.el.style.setProperty('border-radius', `${mix(TILE_SIZE / 2, 22, shown)}px`, 'important');
-                    win.face.style.opacity = String(1 - shown);
+                    win.face.style.opacity = String(glass); win.glass = glass;
                 }
                 updateValue(win.label.style, 'fontSize', labelSize);
                 updateValue(win.faceIcon.style, 'width', iconSize); updateValue(win.faceIcon.style, 'height', iconSize);
                 const entering = focused && !win.el.classList.contains('is-focused');
                 win.el.classList.toggle('is-focused', focused);
                 updateValue(win.el, 'inert', focus > .15 && !selected);
-                updateValue(win.face, 'hidden', spread === 1 || focused);
+                updateValue(win.face, 'hidden', !win.placeholder && (spread === 1 || focused));
                 updateValue(win.label, 'hidden', TILE_SIZE * camera.zoom < 96);
                 if (win.interactive !== interactive || win.detail !== shown) {
                     for (const child of win.el.children) if (child !== win.face) { updateValue(child, 'inert', !interactive); updateValue(child.style, 'opacity', String(shown)); }
@@ -1396,7 +1410,7 @@ The page is rebuilt on every load by replaying all recorded run_js scripts, in o
                     win.control = header.querySelector('.window-controls button'); drawIcon(win.control, 'Minimize2');
                 }
                 win.label = win.face.querySelector('.tile-title'); win.faceIcon = win.face.querySelector('.tile-icon');
-                win.interactive = win.detail = null; // New or replaced children receive the current presentation on the next render.
+                win.interactive = win.detail = win.glass = null; // New or replaced children receive the current presentation on the next render.
                 const title = el.dataset.windowTitle || header.querySelector('h1,h2,h3')?.textContent.trim() || el.id;
                 if (win.title !== title) {
                     renamed = true;
