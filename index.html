@@ -1203,18 +1203,24 @@ The page is rebuilt on every load by replaying all recorded run_js scripts, in o
                 Object.assign(win.el.style, { width: `${box.w}px`, height: `${box.h}px` });
                 targets.push(win);
             }
-            if (!targets.length) return;
-            // One layout at the pinned size for every changing window, then the children keep those boxes.
-            const sizes = targets.map(win => [win, [...win.el.children].filter(child => child !== win.face && getComputedStyle(child).display !== 'none').map(child => [child, child.offsetWidth, child.offsetHeight])]);
-            for (const [win, children] of sizes) {
-                frozenWindows.add(win);
-                for (const [child, w, h] of children) {
-                    if (!frozen.has(child)) frozen.set(child, ['width', 'height', 'flex', 'visibility'].map(name => [name, child.style.getPropertyValue(name), child.style.getPropertyPriority(name)]));
-                    child.style.setProperty('width', `${w}px`, 'important'); child.style.setProperty('height', `${h}px`, 'important'); child.style.setProperty('flex', 'none', 'important');
-                    if (hide) { child.style.setProperty('visibility', 'hidden', 'important'); hiddenContent.add(child); }
+            const content = win => [...win.el.children].filter(child => child !== win.face);
+            const remember = child => { if (!frozen.has(child)) frozen.set(child, ['width', 'height', 'flex', 'visibility'].map(name => [name, child.style.getPropertyValue(name), child.style.getPropertyPriority(name)])); };
+            if (targets.length) {
+                // One layout at the pinned size for every changing window, then the children keep those boxes.
+                const sizes = targets.map(win => [win, content(win).filter(child => getComputedStyle(child).display !== 'none').map(child => [child, child.offsetWidth, child.offsetHeight])]);
+                for (const [win, children] of sizes) {
+                    frozenWindows.add(win);
+                    for (const [child, w, h] of children) {
+                        remember(child);
+                        child.style.setProperty('width', `${w}px`, 'important'); child.style.setProperty('height', `${h}px`, 'important'); child.style.setProperty('flex', 'none', 'important');
+                    }
                 }
             }
-            holdFrozen();
+            // Lite devices show no app content at all while the camera is in motion, whether from a move or a gesture.
+            if (hide) for (const win of windows.values()) for (const child of content(win)) if (!hiddenContent.has(child)) {
+                remember(child); child.style.setProperty('visibility', 'hidden', 'important'); hiddenContent.add(child);
+            }
+            if (targets.length || hide) holdFrozen();
         }
 
         function releaseContent() {
@@ -1225,7 +1231,10 @@ The page is rebuilt on every load by replaying all recorded run_js scripts, in o
             }
             frozen.clear(); frozenWindows.clear();
             // Content that was skipped during the move fades in where it is now visible.
-            for (const child of hiddenContent) if (child.isConnected && !animationsDisabled() && +getComputedStyle(child).opacity > 0) child.animate([{ opacity: 0 }, { opacity: 1 }], { duration: 160, easing: 'ease-out' });
+            for (const child of hiddenContent) {
+                const opacity = child.isConnected ? getComputedStyle(child).opacity : '0';
+                if (+opacity > 0 && !animationsDisabled()) child.animate([{ opacity: 0 }, { opacity }], { duration: 160, easing: 'ease-out' });
+            }
             hiddenContent.clear();
         }
 
@@ -1339,7 +1348,8 @@ The page is rebuilt on every load by replaying all recorded run_js scripts, in o
             }
             camera.x = world.x - dx / next; camera.y = world.y - dy / next; camera.zoom = next;
             if (expanded && next <= focusStart()) atHome = true;
-            if (camera.focus && (focusProgress() || focusProgressOf(before))) freezeContent(before, { ...camera, zoom: focusEnd() });
+            const focusing = camera.focus && (focusProgress() || focusProgressOf(before));
+            if (focusing || liteMotion()) freezeContent(before, focusing ? { ...camera, zoom: focusEnd() } : camera, liteMotion());
             if (defer) queueRender(); else renderMap();
         }
 
@@ -1445,7 +1455,7 @@ The page is rebuilt on every load by replaying all recorded run_js scripts, in o
             syncWindows();
             let drag = null, touch = null, suppressClick = false;
             const point = e => { const box = desktop.getBoundingClientRect(); return { x: e.clientX - box.left, y: e.clientY - box.top }; };
-            const pan = (dx, dy) => { cancelAnimationFrame(animation); settleReveal(); atHome = false; camera.x -= dx / camera.zoom; camera.y -= dy / camera.zoom; queueRender(); };
+            const pan = (dx, dy) => { cancelAnimationFrame(animation); settleReveal(); atHome = false; camera.x -= dx / camera.zoom; camera.y -= dy / camera.zoom; if (liteMotion() && detailOf(camera) > 0) freezeContent(camera, camera, true); queueRender(); };
             const canExplore = () => !expanded && camera.expansion === 0 && focusProgress() <= .95;
             desktop.addEventListener('pointerdown', e => {
                 if (e.pointerType === 'touch' || e.button !== 0 || !canExplore()) return;
