@@ -50,6 +50,7 @@
         #window-layer .tile-face:focus-visible { outline: 3px solid var(--accent); outline-offset: -8px; }
         #window-layer .tile-icon { width: 68px; height: 68px; color: var(--accent); }
         .no-animations #window-layer .tile-face { backdrop-filter: none; background: var(--tint); }
+        @media (pointer: coarse) { #window-layer > .desktop-window { transition: none; } }
         .ui-icon { display: block; width: 20px; height: 20px; flex: none; }
         #window-layer .window-controls .ui-icon { min-width: 20px; min-height: 20px; aspect-ratio: 1; }
         #window-layer .tile-icon .ui-icon { width: 100%; height: 100%; stroke-width: 1.75; }
@@ -326,6 +327,8 @@
     <header id="map-toolbar">
         <button id="map-home" type="button" aria-label="Restoring workspace" title="Restoring workspace" disabled><span id="map-home-icon" aria-hidden="true"></span><span id="map-home-title">Restoring…</span></button>
     </header>
+    <!-- Host classes toggled at runtime, listed once so the Tailwind CDN compiles them up front instead of rebuilding its stylesheet the first time each appears mid-animation. -->
+    <span hidden aria-hidden="true" class="has-focus has-overlay is-expanded is-switching is-panning is-focused no-animations desktop-window is-dragging is-running is-error core-note core-task task-prompt task-result task-steps step-list tool-entry tool-status message-images"></span>
 
     <!-- EMBEDDED SYSTEM PROMPT (editable by users) -->
     <script type="text/plain" id="ouroboros-system_prompt">
@@ -1239,14 +1242,16 @@ The page is rebuilt on every load by replaying all recorded run_js scripts, in o
             const labelSize = `${Math.max(18, 12 / camera.zoom)}px`, iconSize = `${Math.max(68, 28 / camera.zoom)}px`;
             for (const win of windows.values()) {
                 const selected = win.el.id === camera.focus, box = windowBox(win, camera, view);
+                // On touch screens the neighbours of a focused app stay glass tiles instead of becoming content panes around it.
+                const shown = coarsePointer.matches && camera.focus && !spread && !selected ? detail * (1 - smooth(clamp((detail - .3) / .5, 0, 1))) : detail;
                 const focused = selected && focus > .95 && !switching;
                 const interactive = !switching && (focused || (expanded && focus === 0));
                 Object.assign(win.el.style, { width: `${box.w}px`, height: `${box.h}px`, transform: `translate(${box.x}px, ${box.y}px) scale(${box.scale})`, zIndex: selected ? '3' : '1', filter: selected || noAnimations || coarsePointer.matches || !focus ? 'none' : `blur(${focus * 7 / box.scale}px)`, opacity: selected ? '1' : String(1 - focus * (coarsePointer.matches ? 1 : .87)) });
-                if (win.detail !== detail) {
+                if (win.detail !== shown) {
                     // Presentation is written on the window, its tile face and its direct children; inherited variables would restyle every app node each frame.
-                    win.el.style.backgroundColor = `rgb(255 255 255 / ${detail})`;
-                    win.el.style.setProperty('border-radius', `${mix(TILE_SIZE / 2, 22, detail)}px`, 'important');
-                    win.face.style.opacity = String(1 - detail);
+                    win.el.style.backgroundColor = `rgb(255 255 255 / ${shown})`;
+                    win.el.style.setProperty('border-radius', `${mix(TILE_SIZE / 2, 22, shown)}px`, 'important');
+                    win.face.style.opacity = String(1 - shown);
                 }
                 updateValue(win.label.style, 'fontSize', labelSize);
                 updateValue(win.faceIcon.style, 'width', iconSize); updateValue(win.faceIcon.style, 'height', iconSize);
@@ -1255,9 +1260,9 @@ The page is rebuilt on every load by replaying all recorded run_js scripts, in o
                 updateValue(win.el, 'inert', focus > .15 && !selected);
                 updateValue(win.face, 'hidden', spread === 1 || focused);
                 updateValue(win.label, 'hidden', TILE_SIZE * camera.zoom < 96);
-                if (win.interactive !== interactive || win.detail !== detail) {
-                    for (const child of win.el.children) if (child !== win.face) { updateValue(child, 'inert', !interactive); updateValue(child.style, 'opacity', String(detail)); }
-                    win.interactive = interactive; win.detail = detail;
+                if (win.interactive !== interactive || win.detail !== shown) {
+                    for (const child of win.el.children) if (child !== win.face) { updateValue(child, 'inert', !interactive); updateValue(child.style, 'opacity', String(shown)); }
+                    win.interactive = interactive; win.detail = shown;
                 }
                 const action = expanded && focus === 0 ? 'focus' : 'home';
                 if (win.control.dataset.windowAction !== action) {
@@ -1297,7 +1302,7 @@ The page is rebuilt on every load by replaying all recorded run_js scripts, in o
             const { width, viewportHeight: height } = layoutCache, tiles = [...windows.values()];
             const left = Math.min(...tiles.map(w => w.x)) - TILE_SIZE / 2, right = Math.max(...tiles.map(w => w.x)) + TILE_SIZE / 2;
             const top = Math.min(...tiles.map(w => w.y)) - TILE_SIZE / 2, bottom = Math.max(...tiles.map(w => w.y)) + TILE_SIZE / 2;
-            moveCamera({ x: (left + right) / 2, y: (top + bottom) / 2, expansion: 0, zoom: clamp(Math.min((width - 56) / (right - left), (height - toolbar.offsetHeight * 2 - 56) / (bottom - top)), .12 * zoomScale(), .78 * zoomScale()) }, animate);
+            moveCamera({ x: (left + right) / 2, y: (top + bottom) / 2, expansion: 0, zoom: clamp(Math.min((width - 56) / (right - left), (height - toolbar.offsetHeight * 2 - 56) / (bottom - top)), .12 * zoomScale(), .78 * zoomScale()) }, animate, () => { if (atHome && !expanded) camera.focus = null; });
         }
 
         function focusApp(id, animate = true) {
