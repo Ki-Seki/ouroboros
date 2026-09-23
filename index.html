@@ -34,7 +34,7 @@
         #desktop.is-expanded { overflow: auto; cursor: default; }
         #desktop.is-switching { overflow: hidden; pointer-events: none; }
         #desktop.is-expanded.has-overlay { overflow: hidden; }
-        #window-layer > .desktop-window { --tile: #24695b; --tint: #edf5f1; --ink: #1d1d1f; --muted: #6e6e73; --line: #e5e5ea; --surface: #f5f5f7; --accent: var(--tile); position: absolute; left: 0; top: 0; display: flex; flex-direction: column; box-sizing: border-box; overflow: hidden; transform-origin: 0 0; color: var(--ink); background: transparent; font-size: 14px; line-height: 1.5; border: 1px solid #ffffffb3; border-radius: 50% !important; box-shadow: 0 2px 6px #18233305, 0 12px 36px #1823330b, 0 0 0 1px #18233308; transition: box-shadow .28s ease; }
+        #window-layer > .desktop-window { --ink: #1d1d1f; --muted: #6e6e73; --line: #e5e5ea; --surface: #f5f5f7; --accent: var(--tile); position: absolute; left: 0; top: 0; display: flex; flex-direction: column; box-sizing: border-box; overflow: hidden; transform-origin: 0 0; color: var(--ink); background: transparent; font-size: 14px; line-height: 1.5; border: 1px solid #ffffffb3; border-radius: 50% !important; box-shadow: 0 2px 6px #18233305, 0 12px 36px #1823330b, 0 0 0 1px #18233308; transition: box-shadow .28s ease; }
         #window-layer > .desktop-window > :not(.tile-face) { opacity: 0; }
         #window-layer > .desktop-window:focus { outline: none; }
         #window-layer > .desktop-window.is-focused { box-shadow: 0 4px 12px #18233306, 0 24px 80px #18233318, 0 0 0 1px #18233308; }
@@ -46,16 +46,14 @@
         #window-layer .window-controls button { display: grid; place-items: center; flex: none; width: 32px; height: 32px; padding: 0; aspect-ratio: 1; border-radius: 50%; color: var(--muted); }
         #window-layer .window-controls button:hover { color: var(--ink); background: var(--surface); }
         #window-layer .tile-face { position: absolute; inset: 0; z-index: 2; display: grid; align-content: center; justify-items: center; gap: 12px; width: 100%; border: 1px solid #ffffffbf; border-radius: inherit; color: var(--ink); background: linear-gradient(145deg, #ffffffe0, #ffffff80 48%, color-mix(in srgb, var(--tint) 82%, transparent)); backdrop-filter: blur(14px) saturate(1.15); box-shadow: inset 1px 1px 1px #ffffffcc, inset -1px -1px 1px #ffffff66; opacity: 1; cursor: pointer; }
-        #window-layer .tile-face[hidden] { display: none; }
         #window-layer .tile-face:focus-visible { outline: 3px solid var(--accent); outline-offset: -8px; }
         #window-layer .tile-icon { width: 68px; height: 68px; color: var(--accent); }
         .no-animations #window-layer .tile-face { backdrop-filter: none; background: var(--tint); }
-        @media (pointer: coarse) { #window-layer > .desktop-window { transition: none; } }
         .ui-icon { display: block; width: 20px; height: 20px; flex: none; }
         #window-layer .window-controls .ui-icon { min-width: 20px; min-height: 20px; aspect-ratio: 1; }
         #window-layer .tile-icon .ui-icon { width: 100%; height: 100%; stroke-width: 1.75; }
         #window-layer .tile-title { max-width: 78%; font-size: 18px; font-weight: 500; line-height: 1.3; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
-        #window-layer .tile-title[hidden] { display: none !important; }
+        #window-layer :is(.tile-face, .tile-title)[hidden] { display: none; }
         #map-toolbar { position: fixed; inset: 0 0 auto; z-index: 10; display: flex; align-items: center; justify-content: space-between; height: 64px; padding: 0 24px; gap: 12px; }
         #map-toolbar button { min-width: 44px; min-height: 44px; border: 1px solid #ffffffd9; border-radius: 999px; color: #414b5a; background: #ffffffc7; backdrop-filter: blur(12px) saturate(1.2); box-shadow: 0 2px 12px #18233308, inset 0 1px 0 #fff; transition: background .15s, color .15s; }
         #map-toolbar button:hover { color: #202632; background: #fffffff0; }
@@ -64,10 +62,6 @@
         @media (prefers-reduced-transparency: reduce), (prefers-contrast: more) { #map-toolbar button, #window-layer .tile-face { backdrop-filter: none; background: #fff; border-color: #a1a8b2; } }
         #map-home { display: flex; align-items: center; gap: 10px; padding: 0 12px; font-size: 16px; font-weight: 500; letter-spacing: -.03em; }
         #map-home .ui-icon { width: 28px; height: 28px; }
-        @media (max-width: 599px) {
-            #map-toolbar { height: 60px; padding: 0 8px; }
-            #map-home { font-size: 14px; }
-        }
         .desktop-window button, .desktop-window summary { touch-action: manipulation; }
         .desktop-window button:disabled { opacity: .45; cursor: default; }
         .desktop-window :is(button, summary, input, textarea, select) { border-radius: 10px; box-shadow: none; }
@@ -184,9 +178,20 @@
         .core-panel #image-status { margin-top: 8px; color: #b44443; font-size: 12px; }
         .core-panel .core-meta { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 4px 12px; margin-top: 9px; color: var(--muted); font-size: 11px; }
         .core-panel #model-btn { max-width: 190px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-        @media (max-width: 599px) { #window-layer > .desktop-window { font-size: 15px; } .desktop-window .ui-body, .core-panel #activity-log { padding: 20px; } .desktop-window .ui-label, .desktop-window .ui-caption { font-size: 13px; } }
-        @media (pointer: coarse) { .desktop-window button, .desktop-window summary, .desktop-window .ui-button, .desktop-window .ui-segmented > button { min-height: 44px; } #window-layer .window-controls button, .desktop-window .ui-icon-button { width: 44px; height: 44px; } .desktop-window .ui-field, .core-panel #user-prompt { font-size: 16px; } }
-        @media (pointer: coarse) { .core-panel .image-remove { width: 44px; height: 44px; min-height: 44px; } }
+        @media (max-width: 599px) {
+            #map-toolbar { height: 60px; padding: 0 8px; }
+            #map-home { font-size: 14px; }
+            #window-layer > .desktop-window { font-size: 15px; }
+            .desktop-window .ui-body, .core-panel #activity-log { padding: 20px; }
+            .desktop-window .ui-label, .desktop-window .ui-caption { font-size: 13px; }
+        }
+        @media (pointer: coarse) {
+            #window-layer > .desktop-window { transition: none; }
+            .desktop-window button, .desktop-window summary, .desktop-window .ui-button, .desktop-window .ui-segmented > button { min-height: 44px; }
+            #window-layer .window-controls button, .desktop-window .ui-icon-button { width: 44px; height: 44px; }
+            .core-panel .image-remove { width: 44px; height: 44px; min-height: 44px; }
+            .desktop-window .ui-field, .core-panel #user-prompt { font-size: 16px; }
+        }
     </style>
 </head>
 <body class="restoring overflow-hidden relative w-screen h-screen">
@@ -243,7 +248,7 @@
     <!-- GENESIS WINDOW: CORE -->
     <div id="ouroboros-core" class="draggable resizable core-panel select-none" data-window-title="Ouroboros" data-window-icon="Infinity" data-width="520" data-height="640">
         <!-- Header -->
-        <div class="window-header cursor-move px-4 py-3 flex shrink-0 justify-between items-center gap-2">
+        <div class="window-header">
             <h1>Ouroboros</h1>
         </div>
 
@@ -283,10 +288,6 @@
                 <h3 id="appearance-title">Appearance</h3>
                 <fieldset class="wallpaper-options">
                     <legend>Background</legend>
-                    <label class="wallpaper-choice"><input type="radio" name="wallpaper" value="flow"><span class="wallpaper-preview"><svg viewBox="0 0 1600 1000" preserveAspectRatio="xMidYMid slice" aria-hidden="true"><use href="#wallpaper-flow" width="1600" height="1000"/></svg></span><span>Flow</span></label>
-                    <label class="wallpaper-choice"><input type="radio" name="wallpaper" value="glow"><span class="wallpaper-preview"><svg viewBox="0 0 1600 1000" preserveAspectRatio="xMidYMid slice" aria-hidden="true"><use href="#wallpaper-glow" width="1600" height="1000"/></svg></span><span>Glow</span></label>
-                    <label class="wallpaper-choice"><input type="radio" name="wallpaper" value="fold"><span class="wallpaper-preview"><svg viewBox="0 0 1600 1000" preserveAspectRatio="xMidYMid slice" aria-hidden="true"><use href="#wallpaper-fold" width="1600" height="1000"/></svg></span><span>Fold</span></label>
-                    <label class="wallpaper-choice"><input type="radio" name="wallpaper" value="arc"><span class="wallpaper-preview"><svg viewBox="0 0 1600 1000" preserveAspectRatio="xMidYMid slice" aria-hidden="true"><use href="#wallpaper-arc" width="1600" height="1000"/></svg></span><span>Arc</span></label>
                 </fieldset>
                 <label class="flex items-center justify-between gap-4 min-h-11 cursor-pointer" for="disable-animations">
                     <span>Disable animations</span><input id="disable-animations" type="checkbox" class="w-4 h-4 shrink-0 accent-[var(--tile)]">
@@ -384,21 +385,33 @@ The page is rebuilt on every load by replaying all recorded run_js scripts, in o
 
     <!-- MAIN APPLICATION LOGIC -->
     <script type="module">
-        // --- CONSTANTS ---
+        // --- CONSTANTS & HELPERS ---
         const MAX_STEPS = 40;
         const MAX_IMAGES = 4, MAX_IMAGE_BYTES = 512 * 1024, MAX_IMAGE_SIDE = 2048;
         const SETTINGS_KEY = 'ouroboros:settings';
         const HARNESS = '#ouroboros-core, #ouroboros-settings, #map-toolbar, #desktop-wallpaper, #ouroboros-system_prompt, #ouroboros-state';
         const AsyncFunction = Object.getPrototypeOf(async function () {}).constructor;
         const $ = id => document.getElementById(id);
+        const esc = s => String(s).replace(/[&<>]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]));
+        const clip = (s, n) => s.length > n ? s.slice(0, n) + `\n… [${s.length - n} more chars]` : s;
+        const show = v => { try { return v === undefined ? 'ok' : typeof v === 'string' ? v : (JSON.stringify(v, null, 1) ?? String(v)); } catch { return String(v); } };
+        const copyData = value => JSON.parse(JSON.stringify(value));
+        const fingerprint = text => [...text].reduce((hash, char) => Math.imul(hash ^ char.charCodeAt(0), 16777619) >>> 0, 2166136261).toString(16);
+        const drawIcon = (target, name) => target.replaceChildren(lucide.createElement(lucide.icons[name], { class: 'ui-icon', 'stroke-width': 1.8, 'aria-hidden': 'true', focusable: 'false', preserveAspectRatio: 'xMidYMid meet' }));
 
         // --- STATE ---
         // Settings and the pre-import backup stay in the browser. Exports carry history and the code/layout/data journal.
         // Each exported snapshot continues in its own local storage slot.
         // The pristine page is captured before any mutation is replayed; export = pristine + content.
         const pristine = '<!DOCTYPE html>\n' + document.documentElement.outerHTML.replace(/(<html\b[^>]*?) data-wallpaper="[^"]*"/, '$1');
+        // Exports and verification copies are the pristine page with the state block filled in; Tailwind's compiled stylesheet is left out and rebuilt on load.
+        const tailwindStyle = text => /tailwindcss|--tw-/.test(text);
+        const json = value => JSON.stringify(value).replace(/</g, '\\u003c');
+        const pageWith = data => pristine.replace(/<[s]tyle[^>]*>[\s\S]*?<\/[s]tyle>/g, block => tailwindStyle(block) ? '' : block)
+            .replace(/(<script type="application\/json" id="ouroboros-state">)[\s\S]*?(<\/script>)/, (_, open, close) => open + json(data) + close);
         const embedded = JSON.parse($('ouroboros-state').textContent);
         const verification = embedded.verification ?? null;
+        // A verification copy keeps settings, content and traces in memory, so the storage code below needs no special cases.
         if (verification) {
             for (const name of ['localStorage', 'sessionStorage']) {
                 const data = new Map();
@@ -407,9 +420,21 @@ The page is rebuilt on every load by replaying all recorded run_js scripts, in o
         }
         const CONTENT_KEY = `ouroboros:watch:${embedded.savedAt ?? 'live'}`;
         const TRACE_KEY = CONTENT_KEY + ':activity';
-        const load = key => { if (verification) return null; try { return JSON.parse(localStorage.getItem(key)); } catch { return null; } };
+        const load = key => { try { return JSON.parse(localStorage.getItem(key)); } catch { return null; } };
         const storedActivity = load(TRACE_KEY);
         const activity = Array.isArray(storedActivity) ? storedActivity.filter(t => t && Number.isFinite(t.task) && Array.isArray(t.calls) && Array.isArray(t.requests)).slice(-10) : [];
+        // Diagnostic history is bounded and stays on this device, outside exported workspaces.
+        let traceSaveFailed = false;
+        function saveActivity() {
+            activity.splice(0, Math.max(0, activity.length - 10));
+            while (JSON.stringify(activity).length > 200000) {
+                if (activity.length > 1) activity.shift();
+                else if (activity[0]?.calls.length) { activity[0].calls.shift(); activity[0].droppedCalls = (activity[0].droppedCalls || 0) + 1; }
+                else break;
+            }
+            try { localStorage.setItem(TRACE_KEY, JSON.stringify(activity)); traceSaveFailed = false; }
+            catch (e) { if (!traceSaveFailed) log('error', `Could not save activity history: ${e.message}`); traceSaveFailed = true; }
+        }
         const storedSettings = load(SETTINGS_KEY);
         const settings = {
             apiKey: storedSettings?.apiKey ?? '',
@@ -419,6 +444,12 @@ The page is rebuilt on every load by replaying all recorded run_js scripts, in o
             wallpaper: document.documentElement.dataset.wallpaper,
             usage: storedSettings?.usage ?? { input: 0, output: 0, responses: 0, lastTask: null },
         };
+        // Anything shown or stored about a task has the key removed first.
+        const redact = text => {
+            let value = String(text).replace(/\bsk-[A-Za-z0-9_-]{16,}/g, '[redacted key]').replace(/Bearer\s+[A-Za-z0-9._-]+/gi, 'Bearer [redacted]');
+            if (settings.apiKey) value = value.split(settings.apiKey).join('[redacted key]');
+            return value;
+        };
         const saved = load(CONTENT_KEY) ?? embedded;
         const state = {
             history: [...saved.history],
@@ -427,8 +458,11 @@ The page is rebuilt on every load by replaying all recorded run_js scripts, in o
         const importBackup = saved.importBackup ?? null;
         let saveTimer = 0, contentDirty = false;
         const cancelSave = () => { clearTimeout(saveTimer); saveTimer = 0; contentDirty = false; };
-        const saveSettings = () => { if (!verification) localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings)); };
-        const saveContent = () => { if (!verification) localStorage.setItem(CONTENT_KEY, JSON.stringify({ ...state, importBackup })); cancelSave(); };
+        const saveSettings = (what = 'settings', task) => {
+            try { localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings)); return true; }
+            catch (e) { log('error', `Could not save ${what}: ${e.message}`, task); return false; }
+        };
+        const saveContent = () => { localStorage.setItem(CONTENT_KEY, JSON.stringify({ ...state, importBackup })); cancelSave(); };
         const flushContent = () => {
             clearTimeout(saveTimer); saveTimer = 0;
             if (!contentDirty) return;
@@ -442,6 +476,7 @@ The page is rebuilt on every load by replaying all recorded run_js scripts, in o
         let busy = true;         // true until replay finishes
         let importing = false, dataBoundary = state.mutations.length;
         let draftImages = [], activeImages = [], preparingImages = false, exporting = false, imageDatabase;
+        const locked = () => busy || !!controller || importing || exporting || preparingImages;   // nothing may change the canvas while a task, import, export or image upload is in flight
         const imageCache = new Map();
         const tileData = new Map();
         const runtimeErrors = [];
@@ -450,7 +485,6 @@ The page is rebuilt on every load by replaying all recorded run_js scripts, in o
         addEventListener('unhandledrejection', e => noteError(`Unhandled rejection: ${e.reason?.message || e.reason}`));
 
         // Data is restored before scripts run; replayed setup code cannot overwrite saved user content.
-        const copyData = value => JSON.parse(JSON.stringify(value));
         window.ouroboros = Object.freeze({
             getState(id, fallback = {}) { return copyData(tileData.has(id) ? tileData.get(id) : fallback); },
             setState(id, value) {
@@ -463,7 +497,6 @@ The page is rebuilt on every load by replaying all recorded run_js scripts, in o
                 if (previous >= dataBoundary) state.mutations[previous] = { data };
                 else state.mutations.push({ data });
                 tileData.set(id, data.value);
-                if (verification) return;
                 contentDirty = true;
                 if (!saveTimer) saveTimer = setTimeout(flushContent, 250);
             },
@@ -569,7 +602,7 @@ The page is rebuilt on every load by replaying all recorded run_js scripts, in o
         function renderDraftImages() {
             $('draft-images').replaceChildren(...draftImages.map(image => imageItem(image, true)));
             $('draft-images').hidden = !draftImages.length;
-            setRunning(!!controller);
+            renderControls();
         }
 
         function imageStatus(message = '') {
@@ -577,10 +610,10 @@ The page is rebuilt on every load by replaying all recorded run_js scripts, in o
         }
 
         async function addImages(files) {
-            if (busy || controller || importing || exporting || preparingImages) return;
+            if (locked()) return;
             const selected = [...files]; $('image-files').value = ''; if (!selected.length) return;
             if (selected.length + draftImages.length > MAX_IMAGES) return imageStatus(`Attach up to ${MAX_IMAGES} images per message.`);
-            preparingImages = true; setRunning(false); imageStatus();
+            preparingImages = true; renderControls(); imageStatus();
             const prepared = [];
             try { for (const file of selected) prepared.push(await prepareImage(file)); draftImages.push(...prepared); }
             catch (e) { for (const image of prepared) { URL.revokeObjectURL(imageCache.get(image.id).url); imageCache.delete(image.id); } imageStatus(e.message || 'Could not read this image.'); }
@@ -597,11 +630,12 @@ The page is rebuilt on every load by replaying all recorded run_js scripts, in o
             return { role, content: parts };
         }
 
-        // --- DOM ACCESS ---
+        // --- TOOLS ---
+        // Implementations first: DOM reading, saved app sources and the isolated verification copy. The table the model calls follows.
         function htmlOf(el) {
             const clone = el.cloneNode(true);
             clone.querySelectorAll(HARNESS).forEach(n => n.replaceChildren(document.createComment(' harness, omitted ')));
-            clone.querySelectorAll('style').forEach(n => /tailwindcss|--tw-/.test(n.textContent) && n.remove());
+            clone.querySelectorAll('style').forEach(n => tailwindStyle(n.textContent) && n.remove());
             return clone.outerHTML;
         }
 
@@ -623,29 +657,7 @@ The page is rebuilt on every load by replaying all recorded run_js scripts, in o
             return lines;
         }
 
-        const clip = (s, n) => s.length > n ? s.slice(0, n) + `\n… [${s.length - n} more chars]` : s;
-        const show = v => { try { return v === undefined ? 'ok' : typeof v === 'string' ? v : (JSON.stringify(v, null, 1) ?? String(v)); } catch { return String(v); } };
         const runJs = async code => show(await new AsyncFunction(code)());
-        const redact = text => {
-            let value = String(text).replace(/\bsk-[A-Za-z0-9_-]{16,}/g, '[redacted key]').replace(/Bearer\s+[A-Za-z0-9._-]+/gi, 'Bearer [redacted]');
-            if (settings.apiKey) value = value.split(settings.apiKey).join('[redacted key]');
-            return value;
-        };
-        const fingerprint = text => [...text].reduce((hash, char) => Math.imul(hash ^ char.charCodeAt(0), 16777619) >>> 0, 2166136261).toString(16);
-
-        // Diagnostic history is bounded and stays on this device, outside exported workspaces.
-        let traceSaveFailed = false;
-        function saveActivity() {
-            if (verification) return;
-            activity.splice(0, Math.max(0, activity.length - 10));
-            while (JSON.stringify(activity).length > 200000) {
-                if (activity.length > 1) activity.shift();
-                else if (activity[0]?.calls.length) { activity[0].calls.shift(); activity[0].droppedCalls = (activity[0].droppedCalls || 0) + 1; }
-                else break;
-            }
-            try { localStorage.setItem(TRACE_KEY, JSON.stringify(activity)); traceSaveFailed = false; }
-            catch (e) { if (!traceSaveFailed) log('error', `Could not save activity history: ${e.message}`); traceSaveFailed = true; }
-        }
 
         function appSources(appId) {
             return state.mutations.flatMap((m, index) => typeof m.code === 'string' && !m.test && (m.apps ? m.apps.includes(appId) : m.code.includes(appId))
@@ -661,15 +673,11 @@ The page is rebuilt on every load by replaying all recorded run_js scripts, in o
             return { app_id, exists: windows.has(app_id), state_keys: Object.keys(tileData.get(app_id) ?? {}).slice(0, 30), order: 'newest_first', records: records.map(({ code, ...m }) => ({ ...m, chars: code.length })), source: source.slice(offset, end), next_offset: end < source.length ? end : null };
         }
 
-        const fetchAsset = window.fetch.bind(window);
-        // The host requires Lucide; message rendering dependencies are optional.
-        const verificationScripts = [
-            'https://cdn.jsdelivr.net/npm/lucide@1.47.0/dist/umd/lucide.min.js',
-            'https://cdn.jsdelivr.net/npm/markdown-it@15.0.2/dist/browser/markdown-it.umd.min.js',
-            'https://cdn.jsdelivr.net/npm/katex@0.18.7/dist/katex.min.js',
-            'https://cdn.jsdelivr.net/npm/@mdit/plugin-tex@1.1.1/dist/cdn.umd.js',
-        ];
-        let verificationAssets;
+        const fetchAsset = window.fetch.bind(window);   // apps may wrap window.fetch; dependencies load through the original
+        // A verification copy inlines the page's external scripts: Tailwind as its compiled stylesheet, the libraries as fetched source. Only Lucide is required.
+        const externalScripts = [...document.scripts].filter(script => script.hasAttribute('src')).map(script => ({ src: script.getAttribute('src'), tag: script.outerHTML }));
+        const tailwindScript = externalScripts.find(script => script.src.includes('tailwindcss')), libraries = externalScripts.filter(script => script !== tailwindScript);
+        let libraryAssets;
         async function testApps({ app_ids, code, viewport }) {
             if (verification) throw new Error('Nested verification is not supported.');
             if (!app_ids.length || app_ids.some(id => !windows.has(id) || $(id).matches(HARNESS))) throw new Error('Choose existing generated app IDs.');
@@ -687,31 +695,29 @@ The page is rebuilt on every load by replaying all recorded run_js scripts, in o
             let receive, abort;
             try {
                 if (upstream?.aborted) stop();
-                verificationAssets ??= Promise.all(verificationScripts.map(async (src, index) => {
+                libraryAssets ??= Promise.all(libraries.map(async ({ src }) => {
                     try {
                         const response = await fetchAsset(src, { credentials: 'omit', signal: signal.signal });
                         if (!response.ok) throw new Error(`Could not load verification dependency: ${response.status}`);
                         return await response.text();
                     } catch (e) {
-                        if (index === 0 || signal.signal.aborted) throw e;
+                        if (src.includes('lucide') || signal.signal.aborted) throw e;
                         return '';
                     }
-                })).catch(e => { verificationAssets = null; throw e; });
-                const assets = await verificationAssets;
-                if (assets.some(asset => !asset)) verificationAssets = null;
+                })).catch(e => { libraryAssets = null; throw e; });
+                const assets = await libraryAssets;
+                if (assets.some(asset => !asset)) libraryAssets = null;
                 await new Promise(resolve => setTimeout(resolve, 0));
                 if (signal.signal.aborted) throw new DOMException('Verification cancelled or timed out.', 'AbortError');
                 const snapshot = { history: [], mutations: state.mutations.filter((m, index) => sources.has(index) || (m.layout && app_ids.includes(m.layout.id)))
                     .concat(app_ids.filter(id => tileData.has(id)).map(id => ({ data: { id, value: copyData(tileData.get(id)) } }))), verification: { nonce, app_ids, code } };
-                const json = value => JSON.stringify(value).replace(/</g, '\\u003c');
                 const script = source => '<script>(0,eval)(' + json(source) + ');<' + '/script>';
                 const policy = "default-src 'none'; script-src 'unsafe-inline' 'unsafe-eval'; style-src 'unsafe-inline'; img-src data:; font-src data:; frame-src about:; form-action 'none'; base-uri 'none'";
-                let html = pristine.replace('<html ', '<html data-verification ')
-                    .replace('<head>', `<head><meta http-equiv="Content-Security-Policy" content="${policy}">`)
-                    .replace(/(<script type="application\/json" id="ouroboros-state">)[\s\S]*?(<\/script>)/, (_, open, close) => open + json(snapshot) + close);
-                const css = [...document.querySelectorAll('style')].filter(el => /tailwindcss|--tw-/.test(el.textContent)).map(el => el.textContent).join('\n');
-                html = html.replace('<script src="https://cdn.tailwindcss.com"><' + '/script>', () => script(`const style=document.createElement('style');style.textContent=${json(css)};document.head.append(style);`));
-                verificationScripts.forEach((src, i) => { html = html.replace(`<script src="${src}"><` + '/script>', () => assets[i] ? script(assets[i]) : ''); });
+                let html = pageWith(snapshot).replace('<html ', '<html data-verification ')
+                    .replace('<head>', `<head><meta http-equiv="Content-Security-Policy" content="${policy}">`);
+                const css = [...document.querySelectorAll('style')].filter(el => tailwindStyle(el.textContent)).map(el => el.textContent).join('\n');
+                html = html.replace(tailwindScript.tag, () => script(`const style=document.createElement('style');style.textContent=${json(css)};document.head.append(style);`));
+                libraries.forEach(({ tag }, i) => { html = html.replace(tag, () => assets[i] ? script(assets[i]) : ''); });
                 // The trusted wrapper keeps app code separate and restricts nested documents.
                 const wrapper = `const child=document.querySelector('iframe');addEventListener('message',e=>{if(e.source===child.contentWindow&&e.data?.nonce===${json(nonce)})parent.postMessage(e.data,'*');});child.getBoundingClientRect();child.srcdoc=${json(html)};`;
                 const frameHtml = `<!DOCTYPE html><html><head><meta http-equiv="Content-Security-Policy" content="${policy}"><style>body{margin:0}iframe{width:${width}px;height:${height}px;border:0;display:block}</style></head><body><iframe sandbox="allow-scripts allow-forms"></iframe>${script(wrapper)}</body></html>`;
@@ -752,7 +758,6 @@ The page is rebuilt on every load by replaying all recorded run_js scripts, in o
             parent.postMessage({ type: 'ouroboros-verification', nonce: verification.nonce, result }, '*');
         }
 
-        // --- TOOLS ---
         const CODE_SCHEMA = { type: 'object', properties: { code: { type: 'string', description: 'Body of an async function' } }, required: ['code'], additionalProperties: false };
         const APP_IDS = { type: 'array', items: { type: 'string' }, minItems: 1, description: 'Stable IDs of the generated apps involved. Include every app this operation changes or tests.' };
         const TOOLS = [
@@ -863,7 +868,7 @@ The page is rebuilt on every load by replaying all recorded run_js scripts, in o
             flushContent();
             activeImages = images;
             controller = new AbortController();
-            setRunning(true);
+            renderControls();
             const task = Date.now();
             const trace = { task, model: clip(redact(settings.model), 200), contract: fingerprint($('ouroboros-system_prompt').textContent + JSON.stringify(TOOL_SCHEMAS)), startedAt: task, status: 'running', prompt: clip(redact(prompt), 1000), calls: [], requests: [] };
             activity.push(trace); saveActivity();
@@ -894,8 +899,7 @@ The page is rebuilt on every load by replaying all recorded run_js scripts, in o
                     } else completeUsage = false;
                     settings.usage.lastTask = completeUsage ? { ...taskUsage } : null;
                     renderUsage();
-                    try { saveSettings(); }
-                    catch (e) { log('error', `Could not save token usage: ${e.message}`, task); }
+                    saveSettings('token usage', task);
                     input.push(...output);
                     if (text) log('assistant', text, task);
                     if (!calls.length) { trace.status = 'complete'; summary = text; break; }
@@ -916,8 +920,7 @@ The page is rebuilt on every load by replaying all recorded run_js scripts, in o
                         saveTask(task, prompt, summary || '(done)', before, images); saved = true;
                     }
                 } catch (e) { log('error', `Could not save this task: ${e.message}`, task); }
-                try { saveSettings(); }
-                catch (e) { log('error', `Could not save token usage: ${e.message}`, task); }
+                saveSettings('token usage', task);
                 Object.assign(trace, { durationMs: Date.now() - task, usage: taskUsage, saved, summary: clip(redact(summary), 2000) });
                 saveActivity();
                 controller = null;
@@ -925,7 +928,7 @@ The page is rebuilt on every load by replaying all recorded run_js scripts, in o
                     draftImages = [...images]; els.prompt.value = prompt; resizePrompt(); renderDraftImages();
                 }
                 activeImages = [];
-                setRunning(false);
+                renderControls();
                 els.status.textContent = saved ? 'Saved locally' : responded ? 'Not saved' : 'Ready';
                 pruneImages().catch(() => {});
             }
@@ -958,22 +961,19 @@ The page is rebuilt on every load by replaying all recorded run_js scripts, in o
         }
 
         async function exportHtml() {
-            if (busy || controller || importing || exporting || preparingImages) return;
-            exporting = true; setRunning(false);
+            if (locked()) return;
+            exporting = true; renderControls();
             try {
                 syncWindows(); rememberWindows(false); flushContent();
                 const attached = historyImages(state.history);
                 const images = attached.length ? await Promise.all(attached.map(async image => ({ id: image.id, data: await imageDataUrl((await getImage(image)).blob) }))) : [];
-                const json = JSON.stringify({ ...state, ...(images.length ? { images } : {}), savedAt: Date.now() }).replace(/</g, '\\u003c');
-                const html = pristine
-                    .replace(/<[s]tyle[^>]*>[\s\S]*?<\/[s]tyle>/g, s => /tailwindcss|--tw-/.test(s) ? '' : s)
-                    .replace(/(<script type="application\/json" id="ouroboros-state">)[\s\S]*?(<\/script>)/, (_, open, close) => open + json + close);
+                const html = pageWith({ ...state, ...(images.length ? { images } : {}), savedAt: Date.now() });
                 const a = document.createElement('a');
                 a.href = URL.createObjectURL(new Blob([html], { type: 'text/html' }));
                 a.download = `ouroboros_${new Date().toLocaleString('sv').replace(/[: ]/g, '-')}.html`;
                 a.click(); URL.revokeObjectURL(a.href); log('system', 'Exported successfully.');
             } catch (e) { log('error', `Could not export workspace: ${e.message}`); }
-            finally { exporting = false; setRunning(false); }
+            finally { exporting = false; renderControls(); }
         }
 
         function readImport(html) {
@@ -1011,6 +1011,16 @@ The page is rebuilt on every load by replaying all recorded run_js scripts, in o
             return { history: data.history, mutations: data.mutations, ...(images.length ? { images } : {}) };
         }
 
+        // Every canvas swap writes the next content in one go, so the current canvas survives a storage failure, then reloads to replay it from the pristine page.
+        // backup becomes the import backup: omitted keeps the current one, null clears it. onWritten runs once the write has succeeded.
+        async function restart(next, backup = importBackup, onWritten = () => {}) {
+            localStorage.setItem(CONTENT_KEY, JSON.stringify(backup ? { ...next, importBackup: backup } : next));
+            cancelSave(); onWritten();
+            busy = true; draftImages = [];
+            if (imageDatabase) await pruneImages(next, backup).catch(() => {});
+            location.reload();
+        }
+
         async function replaceWorkspace(next) {
             let history = next.history;
             if (next.images?.length) {
@@ -1024,46 +1034,35 @@ The page is rebuilt on every load by replaying all recorded run_js scripts, in o
                 for (const image of prepared) await imageRequest('readwrite', store => store.put(image.blob, [CONTENT_KEY, image.id]));
                 history = history.map(message => message.images ? { ...message, images: message.images.map(image => ({ ...image, id: replacements.get(image.id) })) } : message);
             }
-            // One write keeps the current canvas intact if the import exceeds local storage capacity.
-            localStorage.setItem(CONTENT_KEY, JSON.stringify({ history, mutations: next.mutations, importBackup: state }));
-            cancelSave();
-            busy = true;
-            location.reload();
+            await restart({ history, mutations: next.mutations }, state);
         }
 
         async function importHtml(file) {
-            if (!file || busy || controller || importing || exporting || preparingImages) return;
-            importing = true; setRunning(false); els.status.textContent = 'Reading import…';
+            if (!file || locked()) return;
+            importing = true; renderControls(); els.status.textContent = 'Reading import…';
             try {
                 const next = readImport(await file.text());
                 if (!confirm(`Import ${file.name}? This replaces the canvas and saves a backup. Imported tiles run JavaScript; only import files you trust. API settings and usage stay on this device.`)) return;
                 await replaceWorkspace(next);
             } catch (e) { log('error', `Could not import workspace: ${e.message}`); }
-            finally { importing = false; $('import-file').value = ''; if (!busy) { setRunning(!!controller); pruneImages().catch(() => {}); } }
+            finally { importing = false; $('import-file').value = ''; if (!busy) { renderControls(); pruneImages().catch(() => {}); } }
         }
 
         async function restoreImportBackup() {
-            if (!importBackup || busy || controller || importing || exporting || preparingImages) return;
+            if (!importBackup || locked()) return;
             if (!confirm('Restore the backup? The current canvas will become the new backup. API settings and usage are kept.')) return;
-            importing = true; setRunning(false);
+            importing = true; renderControls();
             try { await replaceWorkspace(importBackup); }
             catch (e) { log('error', `Could not restore backup: ${e.message}`); }
-            finally { importing = false; if (!busy) setRunning(false); }
+            finally { importing = false; if (!busy) renderControls(); }
         }
 
         async function restoreVersion(revision, historyLength) {
-            if (!Number.isInteger(revision) || busy || controller || importing || exporting || preparingImages) return;
+            if (!Number.isInteger(revision) || locked()) return;
             if (!confirm('Restore this version? Later tasks and window changes will be removed. Settings and token usage are kept.')) return;
             flushContent();
-            const next = { history: state.history.slice(0, historyLength), mutations: state.mutations.slice(0, revision) };
-            try {
-                localStorage.setItem(CONTENT_KEY, JSON.stringify({ ...next, importBackup }));
-                cancelSave();
-                Object.assign(state, next);
-                busy = true; draftImages = [];
-                if (imageDatabase) await pruneImages(next).catch(() => {});
-                location.reload();
-            } catch (e) { log('error', `Could not restore version: ${e.message}`); }
+            try { await restart({ history: state.history.slice(0, historyLength), mutations: state.mutations.slice(0, revision) }); }
+            catch (e) { log('error', `Could not restore version: ${e.message}`); }
         }
 
         function undo() {
@@ -1072,18 +1071,13 @@ The page is rebuilt on every load by replaying all recorded run_js scripts, in o
         }
 
         async function reset() {
-            if (busy || controller || importing || exporting || preparingImages) return;
+            if (locked()) return;
             const message = embedded.savedAt
                 ? 'Reset to the exported snapshot? Everything done since the export is discarded; settings are kept.'
                 : 'Reset the page to its pristine state? Mutations and history are cleared; settings are kept.';
             if (!confirm(message + (importBackup ? ' The import backup will also be cleared.' : ''))) return;
-            const next = { history: embedded.history, mutations: embedded.mutations };
-            localStorage.setItem(CONTENT_KEY, JSON.stringify(next));
-            cancelSave();
-            activity.length = 0; saveActivity();
-            busy = true; draftImages = [];
-            if (imageDatabase) await pruneImages(next, null).catch(() => {});
-            location.reload();
+            try { await restart({ history: embedded.history, mutations: embedded.mutations }, null, () => { activity.length = 0; saveActivity(); }); }
+            catch (e) { log('error', `Could not reset canvas: ${e.message}`); }
         }
 
         // --- APP MAP ---
@@ -1092,7 +1086,8 @@ The page is rebuilt on every load by replaying all recorded run_js scripts, in o
             ['#24695b', '#edf5f1'], ['#2864b4', '#eef3fc'], ['#7451ad', '#f3eff9'],
             ['#a45732', '#faf1eb'], ['#5f7036', '#f2f5e9'], ['#aa466b', '#faeef3'],
         ];
-        const desktop = $('desktop'), layer = $('window-layer'), toolbar = $('map-toolbar'), windows = new Map();
+        const paintTile = win => { win.el.style.setProperty('--tile', TILE_COLORS[win.tone][0]); win.el.style.setProperty('--tint', TILE_COLORS[win.tone][1]); };
+        const desktop = $('desktop'), layer = $('window-layer'), toolbar = $('map-toolbar'), home = $('map-home'), homeTitle = $('map-home-title'), windows = new Map();
         const camera = { x: 0, y: 0, zoom: .7, expansion: 0, focus: null };
         const reducedMotion = matchMedia('(prefers-reduced-motion: reduce)'), coarsePointer = matchMedia('(pointer: coarse)');
         const animationsDisabled = () => settings.disableAnimations || reducedMotion.matches;
@@ -1111,10 +1106,6 @@ The page is rebuilt on every load by replaying all recorded run_js scripts, in o
         const queueRender = () => { if (!renderFrame) renderFrame = requestAnimationFrame(renderMap); };
         const updateValue = (target, key, value) => { if (target[key] !== value) target[key] = value; };
         const settleReveal = () => { for (const reveal of revealAnimations) reveal.finish(); revealAnimations = []; };
-
-        function drawIcon(target, name) {
-            target.replaceChildren(lucide.createElement(lucide.icons[name], { class: 'ui-icon', 'stroke-width': 1.8, 'aria-hidden': 'true', focusable: 'false', preserveAspectRatio: 'xMidYMid meet' }));
-        }
 
         function appSize(el, width, height, padding = 24) {
             // Centered apps clear the floating toolbar; the canvas still fills the viewport.
@@ -1303,10 +1294,10 @@ The page is rebuilt on every load by replaying all recorded run_js scripts, in o
                 }
                 if (entering) win.el.focus({ preventScroll: true });
             }
-            updateValue($('map-home-title'), 'textContent', busy ? 'Restoring…' : focus > .95 ? 'All apps' : 'Ouroboros');
-            updateValue($('map-home'), 'title', busy ? 'Restoring workspace' : !atHome ? 'All apps' : expanded ? 'Show app map' : 'Expand apps');
-            updateValue($('map-home'), 'ariaLabel', $('map-home').title);
-            updateValue($('map-home'), 'ariaPressed', String(expanded));
+            updateValue(homeTitle, 'textContent', busy ? 'Restoring…' : focus > .95 ? 'All apps' : 'Ouroboros');
+            updateValue(home, 'title', busy ? 'Restoring workspace' : !atHome ? 'All apps' : expanded ? 'Show app map' : 'Expand apps');
+            updateValue(home, 'ariaLabel', home.title);
+            updateValue(home, 'ariaPressed', String(expanded));
         }
 
         function moveCamera(next, animate = true, done = () => {}) {
@@ -1415,14 +1406,14 @@ The page is rebuilt on every load by replaying all recorded run_js scripts, in o
                 if (win.title !== title) {
                     renamed = true;
                     win.title = title; el.setAttribute('aria-label', title); win.face.setAttribute('aria-label', `Open ${title}`);
-                    win.face.querySelector('.tile-title').textContent = title;
+                    win.label.textContent = title;
                 }
                 const icon = Object.hasOwn(lucide.icons, el.dataset.windowIcon) ? el.dataset.windowIcon : 'AppWindow';
-                if (win.icon !== icon) { win.icon = icon; drawIcon(win.face.querySelector('.tile-icon'), icon); drawIcon(win.mark, icon); }
+                if (win.icon !== icon) { win.icon = icon; drawIcon(win.faceIcon, icon); drawIcon(win.mark, icon); }
                 const sizeKey = [el.dataset.width, el.dataset.height, el.dataset.aspectRatio].join('|');
                 if (win.sizeKey !== sizeKey) { win.sizeKey = sizeKey; layoutCache = null; }
                 Object.assign(el.style, { position: 'absolute', left: '0px', top: '0px', margin: '0px' });
-                el.style.setProperty('--tile', TILE_COLORS[win.tone][0]); el.style.setProperty('--tint', TILE_COLORS[win.tone][1]);
+                paintTile(win);
                 win.face.disabled = busy || importing;
             }
             if (changed) { layoutCache = null; layoutApps(); }
@@ -1442,15 +1433,12 @@ The page is rebuilt on every load by replaying all recorded run_js scripts, in o
 
         function applyLayout({ id, tone }) {
             const win = windows.get(id);
-            if (win && TILE_COLORS[tone]) {
-                win.tone = tone;
-                win.el.style.setProperty('--tile', TILE_COLORS[tone][0]); win.el.style.setProperty('--tint', TILE_COLORS[tone][1]);
-            }
+            if (win && TILE_COLORS[tone]) { win.tone = tone; paintTile(win); }
         }
 
         function uninstallWindow(id) {
             const win = windows.get(id);
-            if (!win || win.el.matches(HARNESS) || busy || controller || importing || exporting || preparingImages) return;
+            if (!win || win.el.matches(HARNESS) || locked()) return;
             if (!confirm(`Uninstall ${win.title}? You can undo this change from history.`)) return;
             const task = Date.now(), before = state.mutations.length;
             const prompt = `Uninstall ${win.title}`, summary = 'Tile uninstalled.';
@@ -1459,7 +1447,7 @@ The page is rebuilt on every load by replaying all recorded run_js scripts, in o
                 state.mutations.push({ task, apps: [id], code: `document.getElementById(${JSON.stringify(id)})?.remove();` });
                 syncWindows(); rememberWindows();
                 saveTask(task, prompt, summary, before);
-                log('user', prompt, task); log('assistant', summary, task); setRunning(false);
+                log('user', prompt, task); log('assistant', summary, task); renderControls();
             } catch (e) { log('error', `Could not uninstall tile: ${e.message}`); }
         }
 
@@ -1537,7 +1525,7 @@ The page is rebuilt on every load by replaying all recorded run_js scripts, in o
                 touch = null;
             }, { capture: true });
             document.addEventListener('touchcancel', () => { touch = null; }, { capture: true });
-            $('map-home').onclick = () => {
+            home.onclick = () => {
                 if (!atHome) returnHome();
                 else switchView();
             };
@@ -1560,9 +1548,26 @@ The page is rebuilt on every load by replaying all recorded run_js scripts, in o
             reducedMotion.addEventListener('change', renderMap);
         }
 
+        // Windows that apps add, rename or remove outside a tool call are picked up on the next frame.
+        function observeWindows() {
+            let queued = false;
+            new MutationObserver(mutations => {
+                const relevant = mutations.some(m => {
+                    const target = m.target.nodeType === 1 ? m.target : m.target.parentElement;
+                    if (!target) return false;
+                    if (m.type === 'attributes') return target.matches('.draggable.resizable');
+                    if (target.closest(HARNESS)) return false;
+                    if (target.closest('.window-header') && !target.closest('.window-controls')) return true;
+                    return m.type === 'childList' && (target.matches('.draggable.resizable') || [...m.addedNodes, ...m.removedNodes].some(n =>
+                        n.nodeType === 1 && (n.matches('.draggable.resizable') || n.querySelector('.draggable.resizable'))));
+                });
+                if (!relevant) return;
+                if (!queued) { queued = true; requestAnimationFrame(() => { queued = false; syncWindows(); }); }
+            }).observe(document.body, { childList: true, subtree: true, attributes: true, attributeFilter: ['id', 'data-window-title', 'data-window-icon', 'data-width', 'data-height', 'data-aspect-ratio'], characterData: true });
+        }
+
         // --- UI ---
         const els = { log: $('activity-log'), prompt: $('user-prompt'), btn: $('execute-btn'), status: $('task-status'), undo: $('undo-btn') };
-        const esc = s => String(s).replace(/[&<>]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]));
         const nearBottom = () => els.log.scrollHeight - els.log.scrollTop - els.log.clientHeight < 48;
         const markdown = window.markdownit?.({ html: false, linkify: true, breaks: true });
         if (markdown) {
@@ -1615,7 +1620,7 @@ The page is rebuilt on every load by replaying all recorded run_js scripts, in o
             if (follow || kind === 'user') els.log.scrollTop = els.log.scrollHeight;
         }
 
-        function logTool(name, args = {}, task) {
+        function logTool(name, args, task) {
             args ||= {};
             const follow = nearBottom();
             const steps = $(`task-${task}`)?.querySelector('.task-steps');
@@ -1660,30 +1665,30 @@ The page is rebuilt on every load by replaying all recorded run_js scripts, in o
                 return new Option(`${h.role === 'user' ? 'Before ' : ''}${new Date(h.task).toLocaleString()} · ${clip(prompt.replace(/\s+/g, ' '), 60)}`, String(h.index));
             }));
             if (!versions.length) $('history-version').add(new Option('No saved versions yet', ''));
-            for (const id of ['history-version', 'rollback-btn']) $(id).disabled = busy || !!controller || importing || exporting || preparingImages || !versions.length;
+            for (const id of ['history-version', 'rollback-btn']) $(id).disabled = locked() || !versions.length;
         }
 
         function renderTiles() {
             const tiles = [...windows.values()].filter(win => !win.el.matches(HARNESS));
-            $('installed-tiles').innerHTML = tiles.map(win => `<li><span>${esc(win.title)}</span><button type="button" class="ui-button is-secondary is-danger shrink-0" data-uninstall="${esc(win.el.id)}" ${busy || controller || importing || exporting || preparingImages ? 'disabled' : ''}>Uninstall</button></li>`).join('')
+            $('installed-tiles').innerHTML = tiles.map(win => `<li><span>${esc(win.title)}</span><button type="button" class="ui-button is-secondary is-danger shrink-0" data-uninstall="${esc(win.el.id)}" ${locked() ? 'disabled' : ''}>Uninstall</button></li>`).join('')
                 || '<li class="text-xs text-[var(--muted)]">No generated tiles yet.</li>';
         }
 
-        function setRunning(on) {
-            $('map-home').disabled = busy;
-            els.btn.textContent = on ? 'Stop' : 'Send ↑';
-            els.btn.classList.toggle('is-running', on);
-            els.btn.disabled = busy || importing || exporting || preparingImages;
-            els.prompt.disabled = busy || importing || exporting || preparingImages;
-            const locked = busy || on || importing || exporting || preparingImages;
-            $('attach-images-btn').disabled = locked || draftImages.length >= MAX_IMAGES;
-            for (const button of $('draft-images').querySelectorAll('button')) button.disabled = locked;
-            for (const id of ['export-btn', 'import-btn', 'import-backup-btn', 'reset-btn', 'save-btn']) $(id).disabled = locked;
+        // Every control reflects the same few flags, so they are all re-rendered whenever one changes.
+        function renderControls() {
+            const running = !!controller, lock = locked();
+            home.disabled = busy;
+            els.btn.textContent = running ? 'Stop' : 'Send ↑';
+            els.btn.classList.toggle('is-running', running);
+            els.btn.disabled = els.prompt.disabled = lock && !running;
+            $('attach-images-btn').disabled = lock || draftImages.length >= MAX_IMAGES;
+            for (const button of $('draft-images').querySelectorAll('button')) button.disabled = lock;
+            for (const id of ['export-btn', 'import-btn', 'import-backup-btn', 'reset-btn', 'save-btn']) $(id).disabled = lock;
             for (const button of document.querySelectorAll('.window-controls button, .tile-face')) button.disabled = busy || importing;
             const last = $(`task-${state.history.at(-1)?.task}`);
-            els.undo.hidden = on || busy || importing || !last || !Number.isInteger(state.history.findLast(h => h.role === 'user')?.before);
+            els.undo.hidden = running || busy || importing || !last || !Number.isInteger(state.history.findLast(h => h.role === 'user')?.before);
             if (last) last.append(els.undo);
-            els.status.textContent = on ? 'Thinking…' : busy ? 'Restoring…' : preparingImages ? 'Preparing images…' : exporting ? 'Exporting…' : 'Ready';
+            els.status.textContent = running ? 'Thinking…' : busy ? 'Restoring…' : preparingImages ? 'Preparing images…' : exporting ? 'Exporting…' : 'Ready';
             renderHistory();
             renderTiles();
         }
@@ -1694,7 +1699,7 @@ The page is rebuilt on every load by replaying all recorded run_js scripts, in o
         }
 
         async function submit() {
-            if (busy || controller || importing || exporting || preparingImages) return;
+            if (locked()) return;
             if (!settings.apiKey || !settings.model) {
                 focusApp('ouroboros-settings');
                 $('api-key').focus();
@@ -1704,10 +1709,10 @@ The page is rebuilt on every load by replaying all recorded run_js scripts, in o
             const images = [...draftImages];
             if (!prompt && !images.length) return;
             if (images.length) {
-                preparingImages = true; setRunning(false); imageStatus();
+                preparingImages = true; renderControls(); imageStatus();
                 try { for (const image of images) await imageRequest('readwrite', store => store.put(imageCache.get(image.id).blob, [CONTENT_KEY, image.id])); }
                 catch (e) { imageStatus(`Could not save images: ${e.message}`); return; }
-                finally { preparingImages = false; setRunning(false); }
+                finally { preparingImages = false; renderControls(); }
             }
             els.prompt.value = ''; resizePrompt();
             draftImages = []; renderDraftImages();
@@ -1717,13 +1722,15 @@ The page is rebuilt on every load by replaying all recorded run_js scripts, in o
         function bindSettings() {
             const fields = { apiKey: 'api-key', apiBase: 'api-base', model: 'model' };
             for (const [key, id] of Object.entries(fields)) $(id).value = settings[key];
+            // One choice per wallpaper symbol, previewed with the symbol itself.
+            const wallpapers = [...document.querySelectorAll('#desktop-wallpaper symbol')].map(symbol => symbol.id.replace('wallpaper-', ''));
+            document.querySelector('.wallpaper-options').insertAdjacentHTML('beforeend', wallpapers.map(name => `<label class="wallpaper-choice"><input type="radio" name="wallpaper" value="${name}"><span class="wallpaper-preview"><svg viewBox="0 0 1600 1000" preserveAspectRatio="xMidYMid slice" aria-hidden="true"><use href="#wallpaper-${name}" width="1600" height="1000"/></svg></span><span>${name[0].toUpperCase() + name.slice(1)}</span></label>`).join(''));
             for (const option of document.querySelectorAll('input[name="wallpaper"]')) {
                 option.checked = option.value === settings.wallpaper;
                 option.onchange = () => {
                     settings.wallpaper = option.value;
                     document.documentElement.dataset.wallpaper = option.value;
-                    try { saveSettings(); }
-                    catch (e) { log('error', `Could not save background: ${e.message}`); }
+                    saveSettings('background');
                 };
             }
             const motion = $('disable-animations');
@@ -1731,8 +1738,7 @@ The page is rebuilt on every load by replaying all recorded run_js scripts, in o
             motion.onchange = () => {
                 settings.disableAnimations = motion.checked;
                 renderMap();
-                try { saveSettings(); }
-                catch (e) { log('error', `Could not save settings: ${e.message}`); }
+                saveSettings();
             };
             $('model-btn').textContent = settings.model || 'Choose model';
             $('model-btn').onclick = () => focusApp('ouroboros-settings');
@@ -1742,12 +1748,10 @@ The page is rebuilt on every load by replaying all recorded run_js scripts, in o
                     settings[key] = field.value.trim() || field.defaultValue;
                     field.value = settings[key];
                 }
-                try {
-                    saveSettings();
-                    $('model-btn').textContent = settings.model || 'Choose model';
-                    focusApp('ouroboros-core');
-                    els.status.textContent = 'Settings saved';
-                } catch (e) { log('error', `Could not save settings: ${e.message}`); }
+                if (!saveSettings()) return;
+                $('model-btn').textContent = settings.model || 'Choose model';
+                focusApp('ouroboros-core');
+                els.status.textContent = 'Settings saved';
             };
             $('export-btn').onclick = exportHtml;
             $('import-btn').onclick = () => $('import-file').click();
@@ -1785,7 +1789,7 @@ The page is rebuilt on every load by replaying all recorded run_js scripts, in o
             };
             els.prompt.oninput = resizePrompt;
             els.prompt.addEventListener('keydown', e => { if (!e.isComposing && (e.ctrlKey || e.metaKey) && e.key === 'Enter') { e.preventDefault(); submit(); } });
-            setRunning(false);
+            renderControls();
             await Promise.all(historyImages(state.history).map(image => getImage(image).catch(() => {})));
             for (const h of state.history) log(h.role, h.content, h.task, h.images);
             for (const trace of activity) if (state.history.some(h => h.task === trace.task)) {
@@ -1800,7 +1804,7 @@ The page is rebuilt on every load by replaying all recorded run_js scripts, in o
             busy = false;
             if (verification) { await finishVerification(setupFailures); return; }
             overview(false);
-            setRunning(false);
+            renderControls();
             desktop.removeAttribute('inert'); desktop.removeAttribute('aria-busy');
             document.body.classList.remove('restoring');
             if (!animationsDisabled()) revealAnimations = [...windows.values()].flatMap(({ el }, index) => {
@@ -1809,21 +1813,7 @@ The page is rebuilt on every load by replaying all recorded run_js scripts, in o
                 return [el.animate([{ opacity: 0 }, { opacity: 1 }], timing), el.animate([{ transform: `translate(${c}px, ${c}px) scale(.88) translate(${-c}px, ${-c}px)` }, { transform: 'none' }], { ...timing, composite: 'add' })];
             });
             pruneImages().catch(() => {});
-
-            let queued = false;
-            new MutationObserver(mutations => {
-                const relevant = mutations.some(m => {
-                    const target = m.target.nodeType === 1 ? m.target : m.target.parentElement;
-                    if (!target) return false;
-                    if (m.type === 'attributes') return target.matches('.draggable.resizable');
-                    if (target.closest(HARNESS)) return false;
-                    if (target.closest('.window-header') && !target.closest('.window-controls')) return true;
-                    return m.type === 'childList' && (target.matches('.draggable.resizable') || [...m.addedNodes, ...m.removedNodes].some(n =>
-                        n.nodeType === 1 && (n.matches('.draggable.resizable') || n.querySelector('.draggable.resizable'))));
-                });
-                if (!relevant) return;
-                if (!queued) { queued = true; requestAnimationFrame(() => { queued = false; syncWindows(); }); }
-            }).observe(document.body, { childList: true, subtree: true, attributes: true, attributeFilter: ['id', 'data-window-title', 'data-window-icon', 'data-width', 'data-height', 'data-aspect-ratio'], characterData: true });
+            observeWindows();
         }
 
         init();
