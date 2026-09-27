@@ -181,7 +181,13 @@
         .core-panel .core-meta { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 4px 12px; margin-top: 9px; color: var(--muted); font-size: 11px; }
         .core-panel #model-btn { max-width: 190px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
         .core-panel #voice-btn[aria-pressed="true"] { color: #fff; background: var(--accent); box-shadow: 0 0 0 4px color-mix(in srgb, var(--accent) 20%, transparent); }
-        .core-panel .voice-line { margin: 0 0 12px; white-space: pre-wrap; }
+        .core-panel .voice-call { display: grid; gap: 6px; margin: 0 0 20px; padding: 2px 0 2px 12px; border-left: 2px solid var(--line); }
+        .core-panel .core-task + .voice-call { margin-top: 20px; }
+        .core-panel .voice-call p { margin: 0; color: var(--muted); font-size: 13px; white-space: pre-wrap; }
+        .core-panel .voice-call p.is-user { color: var(--ink); }
+        .core-panel .task-prompt.is-voice { display: flex; align-items: flex-start; gap: 8px; }
+        .core-panel .voice-mark { flex: none; padding-top: 2px; color: var(--muted); }
+        .core-panel .voice-mark .ui-icon { width: 16px; height: 16px; }
         @media (max-width: 599px) {
             #map-toolbar { height: 60px; padding: 0 8px; }
             #map-home { font-size: 14px; }
@@ -259,8 +265,9 @@
         <!-- Activity Log -->
         <div id="activity-log" class="select-text" aria-label="Conversation">
             <div id="empty-state" class="core-empty"><h2>Create an app.</h2></div>
+            <!-- Kept inside the log, beside the latest task: the map fades and disables the window's direct children, which would stick to it. -->
+            <button id="undo-btn" type="button" class="core-quiet" hidden>↶ Undo this change</button>
         </div>
-        <button id="undo-btn" type="button" class="core-quiet" hidden>↶ Undo this change</button>
 
         <!-- Terminal / Prompt Box -->
         <div class="core-composer shrink-0">
@@ -335,7 +342,7 @@
         <button id="voice-live" type="button" aria-label="End voice" title="End voice" hidden></button>
     </header>
     <!-- Host classes toggled at runtime, listed once so the Tailwind CDN compiles them up front instead of rebuilding its stylesheet the first time each appears mid-animation. -->
-    <span hidden aria-hidden="true" class="has-focus has-overlay is-expanded is-switching is-panning is-focused no-animations desktop-window is-dragging is-running is-error core-note core-task task-prompt task-result task-steps step-list tool-entry tool-status message-images voice-line"></span>
+    <span hidden aria-hidden="true" class="has-focus has-overlay is-expanded is-switching is-panning is-focused no-animations desktop-window is-dragging is-running is-error core-note core-task task-prompt task-result task-steps step-list tool-entry tool-status message-images voice-call is-user is-voice voice-mark"></span>
 
     <!-- EMBEDDED SYSTEM PROMPT (editable by users) -->
     <script type="text/plain" id="ouroboros-system_prompt">
@@ -871,7 +878,7 @@ The page is rebuilt on every load by replaying all recorded run_js scripts, in o
         }
 
         // --- AGENT LOOP ---
-        async function runTask(prompt, images = []) {
+        async function runTask(prompt, images = [], spoken = false) {
             flushContent();
             activeImages = images;
             controller = new AbortController();
@@ -881,7 +888,7 @@ The page is rebuilt on every load by replaying all recorded run_js scripts, in o
             activity.push(trace); saveActivity();
             const before = state.mutations.length;
             dataBoundary = before;
-            log('user', prompt, task, images);
+            log('user', prompt, task, images, spoken);
             const taskUsage = { input: 0, output: 0 };
             settings.usage.lastTask = null;
             renderUsage();
@@ -924,7 +931,7 @@ The page is rebuilt on every load by replaying all recorded run_js scripts, in o
                 try {
                     if (responded) {
                         syncWindows(); rememberWindows();
-                        saveTask(task, prompt, summary || '(done)', before, images); saved = true;
+                        saveTask(task, prompt, summary || '(done)', before, images, spoken); saved = true;
                     }
                 } catch (e) { log('error', `Could not save this task: ${e.message}`, task); }
                 saveSettings('token usage', task);
@@ -943,25 +950,38 @@ The page is rebuilt on every load by replaying all recorded run_js scripts, in o
         }
 
         // --- VOICE ---
-        // A live conversation with a realtime voice model over WebRTC. The voice model talks with the person and hands every app change to the
-        // agent loop through run_task, so spoken requests become ordinary saved tasks.
+        // A live conversation with a realtime voice model over WebRTC. The voice model talks, shows apps and reads them on this page, which is
+        // instant; every change goes to the agent loop through run_task, so spoken requests become ordinary saved tasks.
         let voice = null;
-        const voiceTool = {
-            type: 'function', name: 'run_task',
-            description: "Create or change apps in the workspace. Pass one complete, self-contained instruction in the user's language; the workspace agent builds it and returns a short summary.",
-            parameters: { type: 'object', properties: { instruction: { type: 'string' } }, required: ['instruction'], additionalProperties: false },
-        };
+        const voiceTools = [
+            ["run_task", "Make, change or remove apps, their look or their content, or answer what read_app cannot. Pass the person's request in their own words and language, with details they gave earlier in the call.", { request: { type: 'string' } }],
+            ['read_app', 'Read what one app shows and has saved, by its title, to answer a question about it.', { app: { type: 'string' } }],
+            ['open_app', 'Show one app by its title.', { app: { type: 'string' } }],
+            ['show_apps', 'Go back to all apps.', {}],
+            ['stop_task', 'Stop the change that is running.', {}],
+        ].map(([name, description, properties]) => ({ type: 'function', name, description, parameters: { type: 'object', properties, required: Object.keys(properties), additionalProperties: false } }));
         function voiceInstructions() {
             const apps = [...windows.values()].filter(win => !win.el.matches(HARNESS)).map(win => win.title);
             const recent = state.history.slice(-6).map(h => `${h.role === 'user' ? 'User' : 'Ouroboros'}: ${clip(h.content.replace(/\s+/g, ' '), 300)}`);
             return [
-                'You are the voice of Ouroboros, a workspace that builds small apps for the person you talk with. Speak naturally and briefly, in the language they speak.',
-                'When they want an app created or changed, say a short acknowledgement and call run_task with one complete instruction. When it returns, give the outcome in one short sentence. Never read code, ids or Markdown aloud. If a change is still running, say so and wait.',
+                'You are the voice of Ouroboros, a workspace that builds small apps. Talk like a person on a call: one or two short sentences, in the language the person speaks.',
+                'To answer a question about an app, call read_app and answer from what it returns.',
+                "For anything that changes the workspace, such as making, changing or removing apps, their look or their content, call run_task with the person's request in their own words. Do not decide yourself whether it can be done; run_task will say. Say a few words first, and give the outcome in one short sentence when it returns.",
+                'Call open_app to show an app, show_apps to go back to all apps, and stop_task when they want the running change stopped. If a change is still running, say so and wait.',
+                'Never mention tools, requests, code, ids or how you work.',
                 `Apps on the canvas: ${apps.join(', ') || 'none'}.`,
                 ...(recent.length ? [`Recent conversation:\n${recent.join('\n')}`] : []),
             ].join('\n\n');
         }
         const voiceStatus = text => { if (!voice) return; voice.status = text; if (!controller && !busy) els.status.textContent = text; };
+        const voiceSend = (session, event) => { if (voice === session && session.channel?.readyState === 'open') session.channel.send(JSON.stringify(event)); };
+        // Answers a tool call. When the voice should speak about it, a response is asked for now, or when the one under way ends.
+        function voiceAnswer(session, callId, output, speak = true) {
+            voiceSend(session, { type: 'conversation.item.create', item: { type: 'function_call_output', call_id: callId, output: JSON.stringify(output) } });
+            if (!speak) return;
+            if (session.responding) session.replyPending = true;
+            else voiceSend(session, { type: 'response.create' });
+        }
         function closeVoice(session) {
             session.channel?.close(); session.pc?.close();
             session.stream?.getTracks().forEach(track => track.stop());
@@ -992,7 +1012,7 @@ The page is rebuilt on every load by replaying all recorded run_js scripts, in o
                 const base = settings.apiBase.replace(/\/+$/, '');
                 const secret = await fetch(`${base}/realtime/client_secrets`, {
                     method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${settings.apiKey}` },
-                    body: JSON.stringify({ session: { type: 'realtime', model: settings.voiceModel, instructions: voiceInstructions(), tools: [voiceTool], tool_choice: 'auto',
+                    body: JSON.stringify({ session: { type: 'realtime', model: settings.voiceModel, instructions: voiceInstructions(), tools: voiceTools, tool_choice: 'auto',
                         audio: { input: { transcription: { model: 'gpt-4o-transcribe' }, turn_detection: { type: 'semantic_vad' } }, output: { voice: 'marin' } } } }),
                 });
                 const data = await secret.json().catch(() => ({}));
@@ -1023,39 +1043,59 @@ The page is rebuilt on every load by replaying all recorded run_js scripts, in o
         function voiceEvent(event, session) {
             if (voice !== session) return;
             if (event.type === 'conversation.item.input_audio_transcription.completed') voiceLine('user', event.transcript);
+            else if (event.type === 'response.created') session.responding = true;
             else if (event.type === 'response.output_audio_transcript.delta') voiceStatus('Speaking…');
             else if (event.type === 'response.output_audio_transcript.done') voiceLine('assistant', event.transcript);
             else if (event.type === 'response.done') {
+                session.responding = false;
                 const usage = event.response?.usage;
                 if ([usage?.input_tokens, usage?.output_tokens].every(n => Number.isInteger(n) && n >= 0)) {
                     settings.usage.input += usage.input_tokens; settings.usage.output += usage.output_tokens; settings.usage.responses++;
                     renderUsage(); saveSettings('token usage');
                 }
-                for (const item of event.response?.output ?? []) if (item.type === 'function_call') voiceCall(item, session);
+                for (const item of event.response?.output ?? []) if (item.type === 'function_call' && item.status !== 'incomplete') voiceCall(item, session);
+                if (session.replyPending) { session.replyPending = false; voiceSend(session, { type: 'response.create' }); }
                 voiceStatus('Listening');
             } else if (event.type === 'error') log('error', `Voice: ${event.error?.message || 'the voice model reported an error.'}`);
         }
 
-        // A spoken request runs as an ordinary task; its summary goes back to the voice model, which says the outcome.
+        // Reading and showing apps answer at once. A spoken request runs as an ordinary task, and its summary goes back for the voice to say.
         async function voiceCall(item, session) {
-            if (item.name !== 'run_task' || session.calls.has(item.call_id)) return;
+            if (session.calls.has(item.call_id)) return;
             session.calls.add(item.call_id);
-            let instruction = '';
-            try { instruction = String(JSON.parse(item.arguments).instruction ?? '').trim(); } catch {}
-            const output = !instruction ? { ok: false, error: 'No instruction was given.' }
-                : locked() ? { ok: false, error: 'Another change is still running. Try again when it finishes.' }
-                : { ok: true, summary: clip(await runTask(instruction), 2000) };
-            if (voice !== session || session.channel?.readyState !== 'open') return;
-            session.channel.send(JSON.stringify({ type: 'conversation.item.create', item: { type: 'function_call_output', call_id: item.call_id, output: JSON.stringify(output) } }));
-            session.channel.send(JSON.stringify({ type: 'response.create' }));
+            let args = {};
+            try { args = JSON.parse(item.arguments || '{}') ?? {}; } catch {}
+            const apps = [...windows.values()], wanted = String(args.app ?? '').trim().toLowerCase();
+            const win = wanted && (apps.find(w => w.title.toLowerCase() === wanted || w.el.id === wanted) ?? apps.find(w => w.title.toLowerCase().includes(wanted)));
+            const unknown = () => ({ ok: false, error: `No app matches. Apps: ${apps.filter(w => item.name === 'open_app' || !w.el.matches(HARNESS)).map(w => w.title).join(', ')}` });
+            if (item.name === 'open_app') {
+                if (win) focusApp(win.el.id);
+                return voiceAnswer(session, item.call_id, win ? { ok: true, shown: win.title } : unknown(), !win);
+            }
+            if (item.name === 'read_app') {
+                if (!win || win.el.matches(HARNESS)) return voiceAnswer(session, item.call_id, unknown());
+                const copy = win.el.cloneNode(true);
+                copy.querySelectorAll('script, style, template, .tile-face, .window-controls').forEach(node => node.remove());
+                const saved = tileData.has(win.el.id) ? clip(JSON.stringify(tileData.get(win.el.id)), 3000) : null;
+                return voiceAnswer(session, item.call_id, { ok: true, app: win.title, shows: clip(copy.textContent.replace(/\s+/g, ' ').trim(), 4000), ...(saved ? { saved } : {}) });
+            }
+            if (item.name === 'show_apps') { returnHome(); return voiceAnswer(session, item.call_id, { ok: true }, false); }
+            if (item.name === 'stop_task') return stopTask() ? voiceAnswer(session, item.call_id, { ok: true }, false) : voiceAnswer(session, item.call_id, { ok: false, error: 'Nothing is running.' });
+            if (item.name !== 'run_task') return voiceAnswer(session, item.call_id, { ok: false, error: `Unknown tool ${item.name}.` });
+            const request = String(args.request ?? '').trim();
+            if (!request) return voiceAnswer(session, item.call_id, { ok: false, error: 'No request was given.' });
+            if (locked()) return voiceAnswer(session, item.call_id, { ok: false, error: 'Another change is still running. Try again when it finishes.' });
+            const summary = clip(await runTask(request, [], true), 2000);
+            voiceSend(session, { type: 'session.update', session: { type: 'realtime', instructions: voiceInstructions() } });   // it now knows the apps the task made
+            voiceAnswer(session, item.call_id, { ok: true, summary });
         }
 
         // --- PERSISTENCE ---
         // Keep scripts, tile colors and data in order. History revisions point into this log.
         // The Settings uninstall writes this script. An import writes it too, marked `replaces`, before the file's version of an app the canvas already has.
         const removalScript = id => `document.getElementById(${JSON.stringify(id)})?.remove();`;
-        function saveTask(task, prompt, summary, before, images = []) {
-            state.history = [...state.history, { role: 'user', content: prompt, task, before, ...(images.length ? { images } : {}) }, { role: 'assistant', content: summary, task, revision: state.mutations.length }].slice(-20);
+        function saveTask(task, prompt, summary, before, images = [], spoken = false) {
+            state.history = [...state.history, { role: 'user', content: prompt, task, before, ...(images.length ? { images } : {}), ...(spoken ? { voice: true } : {}) }, { role: 'assistant', content: summary, task, revision: state.mutations.length }].slice(-20);
             dataBoundary = state.mutations.length;
             saveContent();
             const tasks = new Set(state.history.map(message => `task-${message.task}`));
@@ -1745,13 +1785,17 @@ The page is rebuilt on every load by replaying all recorded run_js scripts, in o
             markdown.renderer.rules.table_close = () => '</table></div>';
         }
 
-        function log(kind, text, task, images = []) {
+        function log(kind, text, task, images = [], spoken = false) {
             const follow = nearBottom();
             if (kind === 'user') {
                 $('empty-state')?.remove();
                 const entry = document.createElement('article');
                 entry.id = `task-${task}`; entry.className = 'core-task';
-                entry.innerHTML = `<div class="task-prompt">${text ? `<p>${esc(text)}</p>` : ''}</div><div class="task-result"></div><details class="task-steps" hidden><summary>Steps</summary><div class="step-list"></div></details>`;
+                entry.innerHTML = `<div class="task-prompt${spoken ? ' is-voice' : ''}">${text ? `<p>${esc(text)}</p>` : ''}</div><div class="task-result"></div><details class="task-steps" hidden><summary>Steps</summary><div class="step-list"></div></details>`;
+                if (spoken) {
+                    const mark = document.createElement('span'); mark.className = 'voice-mark'; mark.setAttribute('role', 'img'); mark.setAttribute('aria-label', 'Spoken'); mark.title = 'Spoken';
+                    drawIcon(mark, 'AudioLines'); entry.firstElementChild.prepend(mark);
+                }
                 if (images.length) {
                     const gallery = document.createElement('div'); gallery.className = 'message-images';
                     gallery.append(...images.map(image => imageItem(image))); entry.firstElementChild.append(gallery);
@@ -1769,15 +1813,20 @@ The page is rebuilt on every load by replaying all recorded run_js scripts, in o
             if (follow || kind === 'user') els.log.scrollTop = els.log.scrollHeight;
         }
 
-        // Spoken turns are shown as they happen; only the changes they lead to are saved.
+        // The spoken turns of a call read as one quiet transcript between the tasks they lead to; only those tasks are saved.
         function voiceLine(role, text) {
             if (!text?.trim()) return;
             const follow = nearBottom();
             $('empty-state')?.remove();
+            let call = els.log.lastElementChild;
+            if (!call?.classList.contains('voice-call')) {
+                call = document.createElement('section'); call.className = 'voice-call'; call.setAttribute('aria-label', 'Voice conversation');
+                els.log.append(call);
+            }
             const line = document.createElement('p');
-            line.className = role === 'user' ? 'voice-line task-prompt' : 'voice-line';
+            if (role === 'user') line.className = 'is-user';
             line.textContent = text.trim();
-            els.log.append(line);
+            call.append(line);
             if (follow) els.log.scrollTop = els.log.scrollHeight;
         }
 
@@ -1859,6 +1908,12 @@ The page is rebuilt on every load by replaying all recorded run_js scripts, in o
             els.status.textContent = running ? 'Thinking…' : busy ? 'Restoring…' : preparingImages ? 'Preparing images…' : exporting ? 'Exporting…' : voice ? voice.status : 'Ready';
             renderHistory();
             renderTiles();
+        }
+
+        function stopTask() {
+            if (!controller) return false;
+            controller.abort(); els.btn.disabled = true; els.status.textContent = 'Stopping…';
+            return true;
         }
 
         function resizePrompt() {
@@ -1952,15 +2007,12 @@ The page is rebuilt on every load by replaying all recorded run_js scripts, in o
             composer.addEventListener('dragleave', event => { if (!composer.contains(event.relatedTarget)) composer.classList.remove('is-dragging'); });
             composer.addEventListener('drop', event => { if (event.dataTransfer.files.length) { event.preventDefault(); composer.classList.remove('is-dragging'); addImages(event.dataTransfer.files); } });
             els.undo.onclick = undo;
-            els.btn.onclick = () => {
-                if (!controller) return submit();
-                controller.abort(); els.btn.disabled = true; els.status.textContent = 'Stopping…';
-            };
+            els.btn.onclick = () => stopTask() || submit();
             els.prompt.oninput = resizePrompt;
             els.prompt.addEventListener('keydown', e => { if (!e.isComposing && (e.ctrlKey || e.metaKey) && e.key === 'Enter') { e.preventDefault(); submit(); } });
             renderControls();
             await Promise.all(historyImages(state.history).map(image => getImage(image).catch(() => {})));
-            for (const h of state.history) log(h.role, h.content, h.task, h.images);
+            for (const h of state.history) log(h.role, h.content, h.task, h.images, h.voice);
             for (const trace of activity) if (state.history.some(h => h.task === trace.task)) {
                 for (const call of trace.calls) logTool(call.name, call.args, trace.task)(call.output, call.failed, call.status);
                 const steps = $(`task-${trace.task}`)?.querySelector('.task-steps');
