@@ -62,6 +62,8 @@
         @media (prefers-reduced-transparency: reduce), (prefers-contrast: more) { #map-toolbar button, #window-layer .tile-face { backdrop-filter: none; background: #fff; border-color: #a1a8b2; } }
         #map-home { display: flex; align-items: center; gap: 10px; padding: 0 12px; font-size: 16px; font-weight: 500; letter-spacing: -.03em; }
         #map-home .ui-icon { width: 28px; height: 28px; }
+        #map-toolbar #voice-live { display: grid; place-items: center; color: #fff; background: var(--live, #24695b); border-color: transparent; }
+        #map-toolbar #voice-live[hidden] { display: none; }
         .desktop-window button, .desktop-window summary { touch-action: manipulation; }
         .desktop-window button:disabled { opacity: .45; cursor: default; }
         .desktop-window :is(button, summary, input, textarea, select) { border-radius: 10px; box-shadow: none; }
@@ -178,6 +180,8 @@
         .core-panel #image-status { margin-top: 8px; color: #b44443; font-size: 12px; }
         .core-panel .core-meta { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 4px 12px; margin-top: 9px; color: var(--muted); font-size: 11px; }
         .core-panel #model-btn { max-width: 190px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .core-panel #voice-btn[aria-pressed="true"] { color: #fff; background: var(--accent); box-shadow: 0 0 0 4px color-mix(in srgb, var(--accent) 20%, transparent); }
+        .core-panel .voice-line { margin: 0 0 12px; white-space: pre-wrap; }
         @media (max-width: 599px) {
             #map-toolbar { height: 60px; padding: 0 8px; }
             #map-home { font-size: 14px; }
@@ -264,9 +268,10 @@
                 <div id="draft-images" class="draft-images" aria-label="Attached images" hidden></div>
                 <textarea id="user-prompt" rows="2" aria-label="Your instruction" placeholder="Describe an app or a change…"></textarea>
                 <p id="image-status" role="status" hidden></p>
-                <div class="flex justify-between items-center mt-2 gap-2">
+                <div class="flex items-center mt-2 gap-2">
                     <button id="attach-images-btn" type="button" class="ui-icon-button" aria-label="Attach images" title="Attach images" disabled></button>
                     <input id="image-files" type="file" accept="image/png,image/jpeg,image/webp" multiple hidden>
+                    <button id="voice-btn" type="button" class="ui-icon-button ml-auto" aria-label="Start voice" title="Start voice" aria-pressed="false" disabled></button>
                     <button id="execute-btn" type="button" class="ui-button" disabled>Send ↑</button>
                 </div>
             </div>
@@ -282,6 +287,7 @@
                 <label class="ui-label settings-field">API key<input type="password" id="api-key" placeholder="sk-…" class="ui-field" autocomplete="off"></label>
                 <label class="ui-label settings-field">Base URL<input type="text" id="api-base" value="https://api.openai.com/v1" class="ui-field" spellcheck="false"></label>
                 <label class="ui-label settings-field">Model<input type="text" id="model" value="gpt-5.6-sol" class="ui-field" spellcheck="false"></label>
+                <label class="ui-label settings-field">Voice<input type="text" id="voice-model" value="gpt-realtime-2.1" class="ui-field" spellcheck="false"></label>
                 <div class="flex justify-end"><button id="save-btn" type="button" class="ui-button">Save connection</button></div>
             </section>
             <section class="settings-section" aria-labelledby="appearance-title">
@@ -326,9 +332,10 @@
     </div></main>
     <header id="map-toolbar">
         <button id="map-home" type="button" aria-label="Restoring workspace" title="Restoring workspace" disabled><span id="map-home-icon" aria-hidden="true"></span><span id="map-home-title">Restoring…</span></button>
+        <button id="voice-live" type="button" aria-label="End voice" title="End voice" hidden></button>
     </header>
     <!-- Host classes toggled at runtime, listed once so the Tailwind CDN compiles them up front instead of rebuilding its stylesheet the first time each appears mid-animation. -->
-    <span hidden aria-hidden="true" class="has-focus has-overlay is-expanded is-switching is-panning is-focused no-animations desktop-window is-dragging is-running is-error core-note core-task task-prompt task-result task-steps step-list tool-entry tool-status message-images"></span>
+    <span hidden aria-hidden="true" class="has-focus has-overlay is-expanded is-switching is-panning is-focused no-animations desktop-window is-dragging is-running is-error core-note core-task task-prompt task-result task-steps step-list tool-entry tool-status message-images voice-line"></span>
 
     <!-- EMBEDDED SYSTEM PROMPT (editable by users) -->
     <script type="text/plain" id="ouroboros-system_prompt">
@@ -439,6 +446,7 @@ The page is rebuilt on every load by replaying all recorded run_js scripts, in o
             apiKey: storedSettings?.apiKey ?? '',
             apiBase: storedSettings?.apiBase || $('api-base').defaultValue,
             model: storedSettings?.model || $('model').defaultValue,
+            voiceModel: storedSettings?.voiceModel || $('voice-model').defaultValue,
             disableAnimations: verification ? true : storedSettings?.disableAnimations ?? false,
             wallpaper: document.documentElement.dataset.wallpaper,
             usage: storedSettings?.usage ?? { input: 0, output: 0, responses: 0, lastTask: null },
@@ -931,6 +939,114 @@ The page is rebuilt on every load by replaying all recorded run_js scripts, in o
                 els.status.textContent = saved ? 'Saved locally' : responded ? 'Not saved' : 'Ready';
                 pruneImages().catch(() => {});
             }
+            return summary || '(done)';
+        }
+
+        // --- VOICE ---
+        // A live conversation with a realtime voice model over WebRTC. The voice model talks with the person and hands every app change to the
+        // agent loop through run_task, so spoken requests become ordinary saved tasks.
+        let voice = null;
+        const voiceTool = {
+            type: 'function', name: 'run_task',
+            description: "Create or change apps in the workspace. Pass one complete, self-contained instruction in the user's language; the workspace agent builds it and returns a short summary.",
+            parameters: { type: 'object', properties: { instruction: { type: 'string' } }, required: ['instruction'], additionalProperties: false },
+        };
+        function voiceInstructions() {
+            const apps = [...windows.values()].filter(win => !win.el.matches(HARNESS)).map(win => win.title);
+            const recent = state.history.slice(-6).map(h => `${h.role === 'user' ? 'User' : 'Ouroboros'}: ${clip(h.content.replace(/\s+/g, ' '), 300)}`);
+            return [
+                'You are the voice of Ouroboros, a workspace that builds small apps for the person you talk with. Speak naturally and briefly, in the language they speak.',
+                'When they want an app created or changed, say a short acknowledgement and call run_task with one complete instruction. When it returns, give the outcome in one short sentence. Never read code, ids or Markdown aloud. If a change is still running, say so and wait.',
+                `Apps on the canvas: ${apps.join(', ') || 'none'}.`,
+                ...(recent.length ? [`Recent conversation:\n${recent.join('\n')}`] : []),
+            ].join('\n\n');
+        }
+        const voiceStatus = text => { if (!voice) return; voice.status = text; if (!controller && !busy) els.status.textContent = text; };
+        function closeVoice(session) {
+            session.channel?.close(); session.pc?.close();
+            session.stream?.getTracks().forEach(track => track.stop());
+            if (session.audio) session.audio.srcObject = null;
+        }
+        function stopVoice(message = '') {
+            const session = voice;
+            if (!session) return;
+            voice = null; closeVoice(session);
+            if (message) log('error', message);
+            renderControls();
+        }
+
+        async function startVoice() {
+            if (voice || locked()) return;
+            if (!settings.apiKey || !settings.voiceModel) {
+                focusApp('ouroboros-settings');
+                $('api-key').focus();
+                return log('error', 'Set your API key and voice model to talk with Ouroboros.');
+            }
+            const session = voice = { status: 'Connecting…', calls: new Set() };
+            renderControls();
+            const ended = () => { if (voice === session) return false; closeVoice(session); return true; };   // the person ended the call while it was connecting
+            try {
+                session.stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true } });
+                if (ended()) return;
+                // The API key never leaves this device except to OpenAI: it only mints a short-lived key for this one call.
+                const base = settings.apiBase.replace(/\/+$/, '');
+                const secret = await fetch(`${base}/realtime/client_secrets`, {
+                    method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${settings.apiKey}` },
+                    body: JSON.stringify({ session: { type: 'realtime', model: settings.voiceModel, instructions: voiceInstructions(), tools: [voiceTool], tool_choice: 'auto',
+                        audio: { input: { transcription: { model: 'gpt-4o-transcribe' }, turn_detection: { type: 'semantic_vad' } }, output: { voice: 'marin' } } } }),
+                });
+                const data = await secret.json().catch(() => ({}));
+                if (!secret.ok) throw new Error(data.error?.message || `${secret.status} ${secret.statusText}`);
+                if (ended()) return;
+                const pc = session.pc = new RTCPeerConnection();
+                session.audio = new Audio(); session.audio.autoplay = true;
+                pc.ontrack = event => { session.audio.srcObject = event.streams[0]; };
+                pc.onconnectionstatechange = () => { if (pc.connectionState === 'failed' && voice === session) stopVoice('The voice connection was lost.'); };
+                pc.addTrack(session.stream.getAudioTracks()[0], session.stream);
+                const channel = session.channel = pc.createDataChannel('oai-events');
+                channel.onopen = () => { if (voice === session) voiceStatus('Listening'); };
+                channel.onmessage = event => { try { voiceEvent(JSON.parse(event.data), session); } catch (e) { console.error('Voice event failed:', e); } };
+                const offer = await pc.createOffer();
+                await pc.setLocalDescription(offer);
+                const answer = await fetch(`${base}/realtime/calls`, { method: 'POST', body: offer.sdp, headers: { Authorization: `Bearer ${data.value}`, 'Content-Type': 'application/sdp' } });
+                if (!answer.ok) throw new Error(`${answer.status} ${answer.statusText}`);
+                const sdp = await answer.text();
+                if (ended()) return;
+                await pc.setRemoteDescription({ type: 'answer', sdp });
+            } catch (e) {
+                if (voice === session) stopVoice(`Could not start voice: ${e.name === 'NotAllowedError' ? 'allow microphone access in the browser.' : e.message}`);
+                else closeVoice(session);
+            }
+        }
+
+        function voiceEvent(event, session) {
+            if (voice !== session) return;
+            if (event.type === 'conversation.item.input_audio_transcription.completed') voiceLine('user', event.transcript);
+            else if (event.type === 'response.output_audio_transcript.delta') voiceStatus('Speaking…');
+            else if (event.type === 'response.output_audio_transcript.done') voiceLine('assistant', event.transcript);
+            else if (event.type === 'response.done') {
+                const usage = event.response?.usage;
+                if ([usage?.input_tokens, usage?.output_tokens].every(n => Number.isInteger(n) && n >= 0)) {
+                    settings.usage.input += usage.input_tokens; settings.usage.output += usage.output_tokens; settings.usage.responses++;
+                    renderUsage(); saveSettings('token usage');
+                }
+                for (const item of event.response?.output ?? []) if (item.type === 'function_call') voiceCall(item, session);
+                voiceStatus('Listening');
+            } else if (event.type === 'error') log('error', `Voice: ${event.error?.message || 'the voice model reported an error.'}`);
+        }
+
+        // A spoken request runs as an ordinary task; its summary goes back to the voice model, which says the outcome.
+        async function voiceCall(item, session) {
+            if (item.name !== 'run_task' || session.calls.has(item.call_id)) return;
+            session.calls.add(item.call_id);
+            let instruction = '';
+            try { instruction = String(JSON.parse(item.arguments).instruction ?? '').trim(); } catch {}
+            const output = !instruction ? { ok: false, error: 'No instruction was given.' }
+                : locked() ? { ok: false, error: 'Another change is still running. Try again when it finishes.' }
+                : { ok: true, summary: clip(await runTask(instruction), 2000) };
+            if (voice !== session || session.channel?.readyState !== 'open') return;
+            session.channel.send(JSON.stringify({ type: 'conversation.item.create', item: { type: 'function_call_output', call_id: item.call_id, output: JSON.stringify(output) } }));
+            session.channel.send(JSON.stringify({ type: 'response.create' }));
         }
 
         // --- PERSISTENCE ---
@@ -1652,6 +1768,18 @@ The page is rebuilt on every load by replaying all recorded run_js scripts, in o
             if (follow || kind === 'user') els.log.scrollTop = els.log.scrollHeight;
         }
 
+        // Spoken turns are shown as they happen; only the changes they lead to are saved.
+        function voiceLine(role, text) {
+            if (!text?.trim()) return;
+            const follow = nearBottom();
+            $('empty-state')?.remove();
+            const line = document.createElement('p');
+            line.className = role === 'user' ? 'voice-line task-prompt' : 'voice-line';
+            line.textContent = text.trim();
+            els.log.append(line);
+            if (follow) els.log.scrollTop = els.log.scrollHeight;
+        }
+
         function logTool(name, args, task) {
             args ||= {};
             const follow = nearBottom();
@@ -1714,13 +1842,20 @@ The page is rebuilt on every load by replaying all recorded run_js scripts, in o
             els.btn.classList.toggle('is-running', running);
             els.btn.disabled = els.prompt.disabled = lock && !running;
             $('attach-images-btn').disabled = lock || draftImages.length >= MAX_IMAGES;
+            const voiceButton = $('voice-btn'), talking = !!voice;
+            voiceButton.disabled = !talking && (lock || !window.RTCPeerConnection || !navigator.mediaDevices?.getUserMedia);
+            voiceButton.setAttribute('aria-pressed', String(talking));
+            voiceButton.title = talking ? 'End voice' : 'Start voice'; voiceButton.setAttribute('aria-label', voiceButton.title);
+            // While a call is live it can be ended from anywhere on the map, in the colour of the Ouroboros window.
+            $('voice-live').hidden = !talking;
+            $('voice-live').style.setProperty('--live', $('ouroboros-core').style.getPropertyValue('--tile'));
             for (const button of $('draft-images').querySelectorAll('button')) button.disabled = lock;
             for (const id of ['export-btn', 'import-btn', 'reset-btn', 'save-btn']) $(id).disabled = lock;
             for (const button of document.querySelectorAll('.window-controls button, .tile-face')) button.disabled = busy || importing;
             const last = $(`task-${state.history.at(-1)?.task}`);
             els.undo.hidden = running || busy || importing || !last || !Number.isInteger(state.history.findLast(h => h.role === 'user')?.before);
             if (last) last.append(els.undo);
-            els.status.textContent = running ? 'Thinking…' : busy ? 'Restoring…' : preparingImages ? 'Preparing images…' : exporting ? 'Exporting…' : 'Ready';
+            els.status.textContent = running ? 'Thinking…' : busy ? 'Restoring…' : preparingImages ? 'Preparing images…' : exporting ? 'Exporting…' : voice ? voice.status : 'Ready';
             renderHistory();
             renderTiles();
         }
@@ -1752,7 +1887,7 @@ The page is rebuilt on every load by replaying all recorded run_js scripts, in o
         }
 
         function bindSettings() {
-            const fields = { apiKey: 'api-key', apiBase: 'api-base', model: 'model' };
+            const fields = { apiKey: 'api-key', apiBase: 'api-base', model: 'model', voiceModel: 'voice-model' };
             for (const [key, id] of Object.entries(fields)) $(id).value = settings[key];
             // One choice per wallpaper symbol, previewed with the symbol itself.
             const wallpapers = [...document.querySelectorAll('#desktop-wallpaper symbol')].map(symbol => symbol.id.replace('wallpaper-', ''));
@@ -1803,6 +1938,9 @@ The page is rebuilt on every load by replaying all recorded run_js scripts, in o
             bindSettings();
             drawIcon($('attach-images-btn'), 'ImagePlus');
             $('attach-images-btn').onclick = () => $('image-files').click();
+            drawIcon($('voice-btn'), 'AudioLines'); drawIcon($('voice-live'), 'AudioLines');
+            $('voice-btn').onclick = () => voice ? stopVoice() : startVoice();
+            $('voice-live').onclick = () => stopVoice();
             $('image-files').onchange = event => addImages(event.target.files);
             els.prompt.addEventListener('paste', event => {
                 const files = [...(event.clipboardData?.items || [])].filter(item => item.kind === 'file' && item.type.startsWith('image/')).map(item => item.getAsFile()).filter(Boolean);
