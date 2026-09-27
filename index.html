@@ -152,9 +152,11 @@
         .core-panel .message-markdown > :last-child { margin-bottom: 0; }
         .core-panel .core-note { margin: 10px 0; color: var(--muted); font-size: 12px; white-space: pre-wrap; }
         .core-panel .is-error { color: #9a493e; }
+        .core-panel .task-live { margin: 8px 0 0; color: var(--muted); font-size: 13px; }
         .core-panel .task-steps { margin-top: 10px; font-size: 12px; color: var(--muted); }
-        .core-panel .tool-entry { margin-top: 8px; padding-left: 10px; border-left: 1px solid var(--line); }
-        .core-panel .tool-entry summary { overflow-wrap: anywhere; }
+        .core-panel :is(.task-steps, .tool-entry) > summary { width: fit-content; max-width: 100%; overflow-wrap: anywhere; }
+        .core-panel .step-list { display: grid; gap: 4px; margin-top: 6px; padding-left: 10px; border-left: 1px solid var(--line); }
+        .core-panel .tool-status::before { content: '·'; margin: 0 6px; }
         .core-panel .tool-entry pre { margin-top: 6px; padding: 8px; background: var(--tint); font: 11px/1.6 ui-monospace, monospace; white-space: pre-wrap; overflow-wrap: anywhere; }
         .core-panel #undo-btn { margin-top: 10px; padding-left: 0; }
         .core-panel .core-composer { padding: 0 20px 20px; flex-shrink: 1; min-height: 0; overflow: auto; }
@@ -179,6 +181,7 @@
         .core-panel .image-unavailable { display: grid; place-items: center; height: 100%; color: var(--muted); font-size: 12px; }
         .core-panel #image-status { margin-top: 8px; color: #b44443; font-size: 12px; }
         .core-panel .core-meta { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 4px 12px; margin-top: 9px; color: var(--muted); font-size: 11px; }
+        .core-panel #execute-btn.is-running { background: #fff; border-color: var(--line); }
         .core-panel #model-btn { max-width: 190px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
         .core-panel #voice-btn[aria-pressed="true"] { color: #fff; background: var(--accent); box-shadow: 0 0 0 4px color-mix(in srgb, var(--accent) 20%, transparent); }
         .core-panel .voice-call { display: grid; gap: 6px; margin: 0 0 20px; padding: 2px 0 2px 12px; border-left: 2px solid var(--line); }
@@ -342,7 +345,7 @@
         <button id="voice-live" type="button" aria-label="End voice" title="End voice" hidden></button>
     </header>
     <!-- Host classes toggled at runtime, listed once so the Tailwind CDN compiles them up front instead of rebuilding its stylesheet the first time each appears mid-animation. -->
-    <span hidden aria-hidden="true" class="has-focus has-overlay is-expanded is-switching is-panning is-focused no-animations desktop-window is-dragging is-running is-error core-note core-task task-prompt task-result task-steps step-list tool-entry tool-status message-images voice-call is-user is-voice voice-mark"></span>
+    <span hidden aria-hidden="true" class="has-focus has-overlay is-expanded is-switching is-panning is-focused no-animations desktop-window is-dragging is-running is-error core-note core-task task-prompt task-result task-steps step-list tool-entry tool-status message-images voice-call is-user is-voice voice-mark task-live"></span>
 
     <!-- EMBEDDED SYSTEM PROMPT (editable by users) -->
     <script type="text/plain" id="ouroboros-system_prompt">
@@ -889,6 +892,7 @@ The page is rebuilt on every load by replaying all recorded run_js scripts, in o
             const before = state.mutations.length;
             dataBoundary = before;
             log('user', prompt, task, images, spoken);
+            taskLive(task, 'Working…');
             const taskUsage = { input: 0, output: 0 };
             settings.usage.lastTask = null;
             renderUsage();
@@ -915,8 +919,8 @@ The page is rebuilt on every load by replaying all recorded run_js scripts, in o
                     renderUsage();
                     saveSettings('token usage', task);
                     input.push(...output);
-                    if (text) log('assistant', text, task);
-                    if (!calls.length) { trace.status = 'complete'; summary = text; break; }
+                    if (!calls.length) { if (text) log('assistant', text, task); trace.status = 'complete'; summary = text; break; }
+                    if (text) taskLive(task, text);   // narration between steps; the saved history keeps only the final answer
                     for (const call of calls) {
                         if (controller.signal.aborted) throw new DOMException('Aborted', 'AbortError');
                         input.push({ type: 'function_call_output', call_id: call.call_id, output: await runTool(call, task) });
@@ -942,6 +946,7 @@ The page is rebuilt on every load by replaying all recorded run_js scripts, in o
                     draftImages = [...images]; els.prompt.value = prompt; resizePrompt(); renderDraftImages();
                 }
                 activeImages = [];
+                taskLive(task, '');
                 renderControls();
                 els.status.textContent = saved ? 'Saved locally' : responded ? 'Not saved' : 'Ready';
                 pruneImages().catch(() => {});
@@ -1042,7 +1047,10 @@ The page is rebuilt on every load by replaying all recorded run_js scripts, in o
 
         function voiceEvent(event, session) {
             if (voice !== session) return;
-            if (event.type === 'conversation.item.input_audio_transcription.completed') voiceLine('user', event.transcript);
+            if (event.type === 'conversation.item.input_audio_transcription.completed') {
+                if (session.request && sameWords(event.transcript, session.request)) session.request = null;   // the task already shows it
+                else voiceLine('user', event.transcript);
+            }
             else if (event.type === 'response.created') session.responding = true;
             else if (event.type === 'response.output_audio_transcript.delta') voiceStatus('Speaking…');
             else if (event.type === 'response.output_audio_transcript.done') voiceLine('assistant', event.transcript);
@@ -1085,6 +1093,7 @@ The page is rebuilt on every load by replaying all recorded run_js scripts, in o
             const request = String(args.request ?? '').trim();
             if (!request) return voiceAnswer(session, item.call_id, { ok: false, error: 'No request was given.' });
             if (locked()) return voiceAnswer(session, item.call_id, { ok: false, error: 'Another change is still running. Try again when it finishes.' });
+            session.request = unsay(request) ? null : request;
             const summary = clip(await runTask(request, [], true), 2000);
             voiceSend(session, { type: 'session.update', session: { type: 'realtime', instructions: voiceInstructions() } });   // it now knows the apps the task made
             voiceAnswer(session, item.call_id, { ok: true, summary });
@@ -1791,7 +1800,7 @@ The page is rebuilt on every load by replaying all recorded run_js scripts, in o
                 $('empty-state')?.remove();
                 const entry = document.createElement('article');
                 entry.id = `task-${task}`; entry.className = 'core-task';
-                entry.innerHTML = `<div class="task-prompt${spoken ? ' is-voice' : ''}">${text ? `<p>${esc(text)}</p>` : ''}</div><div class="task-result"></div><details class="task-steps" hidden><summary>Steps</summary><div class="step-list"></div></details>`;
+                entry.innerHTML = `<div class="task-prompt${spoken ? ' is-voice' : ''}">${text ? `<p>${esc(text)}</p>` : ''}</div><div class="task-result"></div><p class="task-live" hidden></p><details class="task-steps" hidden><summary>Steps</summary><div class="step-list"></div></details>`;
                 if (spoken) {
                     const mark = document.createElement('span'); mark.className = 'voice-mark'; mark.setAttribute('role', 'img'); mark.setAttribute('aria-label', 'Spoken'); mark.title = 'Spoken';
                     drawIcon(mark, 'AudioLines'); entry.firstElementChild.prepend(mark);
@@ -1813,6 +1822,19 @@ The page is rebuilt on every load by replaying all recorded run_js scripts, in o
             if (follow || kind === 'user') els.log.scrollTop = els.log.scrollHeight;
         }
 
+        const sameWords = (a, b) => { const words = text => String(text).toLowerCase().replace(/[\s\p{P}]+/gu, ''); return words(a) === words(b); };
+        // A spoken request is shown once, as the task it starts: its line in the call transcript goes, with the acknowledgement after it.
+        function unsay(request) {
+            const call = els.log.lastElementChild;
+            if (!call?.classList.contains('voice-call')) return false;
+            const line = [...call.querySelectorAll('p.is-user')].findLast(p => sameWords(p.textContent, request));
+            if (!line) return false;
+            while (line.nextSibling) line.nextSibling.remove();
+            line.remove();
+            if (!call.childElementCount) call.remove();
+            return true;
+        }
+
         // The spoken turns of a call read as one quiet transcript between the tasks they lead to; only those tasks are saved.
         function voiceLine(role, text) {
             if (!text?.trim()) return;
@@ -1830,6 +1852,15 @@ The page is rebuilt on every load by replaying all recorded run_js scripts, in o
             if (follow) els.log.scrollTop = els.log.scrollHeight;
         }
 
+        // While a task runs, one quiet line under its prompt says what it is doing; the final answer takes its place.
+        function taskLive(task, text) {
+            const line = $(`task-${task}`)?.querySelector('.task-live');
+            if (!line) return;
+            const plain = text.replace(/[*_`#>]+/g, '').replace(/\s+/g, ' ').trim();
+            line.textContent = plain.length > 200 ? `${plain.slice(0, 199)}…` : plain;
+            line.hidden = !plain;
+        }
+
         function logTool(name, args, task) {
             args ||= {};
             const follow = nearBottom();
@@ -1839,11 +1870,17 @@ The page is rebuilt on every load by replaying all recorded run_js scripts, in o
             const subject = typeof args.selector === 'string' ? args.selector : typeof args.app_id === 'string' ? args.app_id : Array.isArray(args.app_ids) ? args.app_ids.filter(id => typeof id === 'string').join(', ') : '';
             const entry = document.createElement('details');
             entry.className = 'tool-entry';
-            entry.innerHTML = `<summary>${esc(title)} <span class="tool-status">…</span></summary>`
+            entry.innerHTML = `<summary>${esc(title)}<span class="tool-status">…</span></summary>`
                 + `<p class="core-note">${esc([name, subject, args.outline && '(outline)'].filter(Boolean).join(' · '))}</p>`
                 + (args.code ? `<pre>${esc(redact(args.code))}</pre>` : '') + '<pre>…</pre>';
             target.append(entry);
-            if (steps) { steps.hidden = false; steps.querySelector('summary').textContent = `${target.children.length} step${target.children.length === 1 ? '' : 's'}`; }
+            const count = () => {
+                if (!steps) return;
+                const all = target.children.length, failures = target.querySelectorAll(':scope > .is-error').length;
+                steps.hidden = false;
+                steps.querySelector('summary').textContent = `${all} step${all === 1 ? '' : 's'}${failures ? ` · ${failures} failed` : ''}`;
+            };
+            count();
             els.status.textContent = `${title}…`;
             if (follow) els.log.scrollTop = els.log.scrollHeight;
             return (result, failed, status = failed ? 'Error' : 'Done') => {
@@ -1851,7 +1888,7 @@ The page is rebuilt on every load by replaying all recorded run_js scripts, in o
                 entry.querySelector('.tool-status').textContent = status;
                 entry.classList.toggle('is-error', !!failed);
                 entry.lastElementChild.textContent = clip(result, 12000);
-                if (failed) { entry.open = true; if (steps) steps.open = true; }
+                count();
                 if (follow) els.log.scrollTop = els.log.scrollHeight;
             };
         }
@@ -2015,10 +2052,10 @@ The page is rebuilt on every load by replaying all recorded run_js scripts, in o
             for (const h of state.history) log(h.role, h.content, h.task, h.images, h.voice);
             for (const trace of activity) if (state.history.some(h => h.task === trace.task)) {
                 for (const call of trace.calls) logTool(call.name, call.args, trace.task)(call.output, call.failed, call.status);
-                const steps = $(`task-${trace.task}`)?.querySelector('.task-steps');
-                if (steps) {
-                    steps.querySelector('summary').textContent = `${trace.droppedCalls ? 'Last ' : ''}${trace.calls.length} steps · ${trace.model} · ${trace.contract}`;
-                    steps.open = false;
+                const summary = $(`task-${trace.task}`)?.querySelector('.task-steps > summary');
+                if (summary) {
+                    if (trace.droppedCalls) summary.prepend('Last ');
+                    summary.title = `${trace.model} · ${trace.contract}`;
                 }
             }
             const setupFailures = await replay();
