@@ -1005,6 +1005,7 @@ The page is rebuilt on every load by replaying all recorded run_js scripts, in o
                 pc.addTrack(session.stream.getAudioTracks()[0], session.stream);
                 const channel = session.channel = pc.createDataChannel('oai-events');
                 channel.onopen = () => { if (voice === session) voiceStatus('Listening'); };
+                channel.onclose = () => { if (voice === session) stopVoice('The voice session ended.'); };   // the server ended it, for instance at its time limit
                 channel.onmessage = event => { try { voiceEvent(JSON.parse(event.data), session); } catch (e) { console.error('Voice event failed:', e); } };
                 const offer = await pc.createOffer();
                 await pc.setLocalDescription(offer);
