@@ -317,7 +317,6 @@
                 <div class="flex flex-wrap gap-2">
                     <button id="export-btn" type="button" class="ui-button is-secondary">Export HTML</button>
                     <button id="import-btn" type="button" class="ui-button is-secondary">Import HTML</button>
-                    <button id="import-backup-btn" type="button" class="ui-button is-secondary" hidden>Restore backup</button>
                     <button id="reset-btn" type="button" class="ui-button is-secondary is-danger">Reset canvas…</button>
                 </div>
                 <input id="import-file" type="file" accept=".html,.htm,text/html" hidden>
@@ -400,7 +399,7 @@ The page is rebuilt on every load by replaying all recorded run_js scripts, in o
         const drawIcon = (target, name) => target.replaceChildren(lucide.createElement(lucide.icons[name], { class: 'ui-icon', 'stroke-width': 1.8, 'aria-hidden': 'true', focusable: 'false', preserveAspectRatio: 'xMidYMid meet' }));
 
         // --- STATE ---
-        // Settings and the pre-import backup stay in the browser. Exports carry history and the code/layout/data journal.
+        // Settings stay in the browser. Exports carry history and the code/layout/data journal.
         // Each exported snapshot continues in its own local storage slot.
         // The pristine page is captured before any mutation is replayed; export = pristine + content.
         const pristine = '<!DOCTYPE html>\n' + document.documentElement.outerHTML.replace(/(<html\b[^>]*?) data-wallpaper="[^"]*"/, '$1');
@@ -455,14 +454,13 @@ The page is rebuilt on every load by replaying all recorded run_js scripts, in o
             history: [...saved.history],
             mutations: [...saved.mutations],
         };
-        const importBackup = saved.importBackup ?? null;
         let saveTimer = 0, contentDirty = false;
         const cancelSave = () => { clearTimeout(saveTimer); saveTimer = 0; contentDirty = false; };
         const saveSettings = (what = 'settings', task) => {
             try { localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings)); return true; }
             catch (e) { log('error', `Could not save ${what}: ${e.message}`, task); return false; }
         };
-        const saveContent = () => { localStorage.setItem(CONTENT_KEY, JSON.stringify({ ...state, importBackup })); cancelSave(); };
+        const saveContent = () => { localStorage.setItem(CONTENT_KEY, JSON.stringify(state)); cancelSave(); };
         const flushContent = () => {
             clearTimeout(saveTimer); saveTimer = 0;
             if (!contentDirty) return;
@@ -547,10 +545,10 @@ The page is rebuilt on every load by replaying all recorded run_js scripts, in o
             return cached;
         }
 
-        async function pruneImages(next = state, backup = importBackup) {
+        async function pruneImages(next = state) {
             if (importing || exporting || verification) return;
             await imageRequest('readwrite', store => {
-                const used = new Set([...historyImages(next.history), ...historyImages(backup?.history || []), ...historyImages(embedded.history), ...draftImages, ...activeImages].map(image => image.id));
+                const used = new Set([...historyImages(next.history), ...historyImages(embedded.history), ...draftImages, ...activeImages].map(image => image.id));
                 const request = store.openCursor(IDBKeyRange.bound([CONTENT_KEY, ''], [CONTENT_KEY, '\uffff']));
                 request.onsuccess = () => { const cursor = request.result; if (cursor) { if (!used.has(cursor.key[1])) cursor.delete(); cursor.continue(); } };
                 for (const [id, image] of imageCache) if (!used.has(id) && !document.querySelector(`[data-image-id="${id}"]`)) { URL.revokeObjectURL(image.url); imageCache.delete(id); }
@@ -660,7 +658,8 @@ The page is rebuilt on every load by replaying all recorded run_js scripts, in o
         const runJs = async code => show(await new AsyncFunction(code)());
 
         function appSources(appId) {
-            return state.mutations.flatMap((m, index) => typeof m.code === 'string' && !m.test && (m.apps ? m.apps.includes(appId) : m.code.includes(appId))
+            const since = state.mutations.findLastIndex(m => m.replaces && m.apps[0] === appId);
+            return state.mutations.flatMap((m, index) => index > since && typeof m.code === 'string' && !m.test && (m.apps ? m.apps.includes(appId) : m.code.includes(appId))
                 ? [{ index, task: m.task, code: m.code, association: m.apps ? 'declared' : 'text_match' }] : []);
         }
 
@@ -709,7 +708,7 @@ The page is rebuilt on every load by replaying all recorded run_js scripts, in o
                 if (assets.some(asset => !asset)) libraryAssets = null;
                 await new Promise(resolve => setTimeout(resolve, 0));
                 if (signal.signal.aborted) throw new DOMException('Verification cancelled or timed out.', 'AbortError');
-                const snapshot = { history: [], mutations: state.mutations.filter((m, index) => sources.has(index) || (m.layout && app_ids.includes(m.layout.id)))
+                const snapshot = { history: [], mutations: state.mutations.filter((m, index) => sources.has(index) || (m.layout && app_ids.includes(m.layout.id)) || (m.replaces && app_ids.includes(m.apps[0])))
                     .concat(app_ids.filter(id => tileData.has(id)).map(id => ({ data: { id, value: copyData(tileData.get(id)) } }))), verification: { nonce, app_ids, code } };
                 const script = source => '<script>(0,eval)(' + json(source) + ');<' + '/script>';
                 const policy = "default-src 'none'; script-src 'unsafe-inline' 'unsafe-eval'; style-src 'unsafe-inline'; img-src data:; font-src data:; frame-src about:; form-action 'none'; base-uri 'none'";
@@ -936,6 +935,8 @@ The page is rebuilt on every load by replaying all recorded run_js scripts, in o
 
         // --- PERSISTENCE ---
         // Keep scripts, tile colors and data in order. History revisions point into this log.
+        // The Settings uninstall writes this script. An import writes it too, marked `replaces`, before the file's version of an app the canvas already has.
+        const removalScript = id => `document.getElementById(${JSON.stringify(id)})?.remove();`;
         function saveTask(task, prompt, summary, before, images = []) {
             state.history = [...state.history, { role: 'user', content: prompt, task, before, ...(images.length ? { images } : {}) }, { role: 'assistant', content: summary, task, revision: state.mutations.length }].slice(-20);
             dataBoundary = state.mutations.length;
@@ -946,14 +947,24 @@ The page is rebuilt on every load by replaying all recorded run_js scripts, in o
 
         async function replay() {
             let failed = 0;
+            // An import that replaces an app splits the app's saved data: scripts before the split read the old version's data, scripts after it the newer data.
+            const splits = new Map();
+            state.mutations.forEach((m, index) => { if (m.replaces) splits.set(m.apps[0], [...(splits.get(m.apps[0]) ?? []), index]); });
+            const restoreData = (id, index) => {
+                const cuts = splits.get(id), from = cuts.findLast(cut => cut <= index) ?? -1, to = cuts.find(cut => cut > index) ?? Infinity;
+                const record = state.mutations.findLast((m, i) => i > from && i < to && m.data?.id === id);
+                if (record) tileData.set(id, record.data.value); else tileData.delete(id);
+            };
             tileData.clear();
             for (const m of state.mutations) if (m.data) tileData.set(m.data.id, m.data.value);
+            for (const id of splits.keys()) restoreData(id, -1);
             for (const [index, m] of state.mutations.entries()) {
                 // Keep skipped test entries in place so saved history revisions stay valid.
                 if (m.data || m.test) continue;
                 if (m.layout) { applyLayout(m.layout); continue; }
                 try { await new AsyncFunction(m.code)(); }
                 catch (e) { failed++; console.error('Replay failed:', e, index); noteError(`Replay of saved script ${index} failed: ${e.message}`); }
+                if (m.replaces) restoreData(m.apps[0], index);
                 syncWindows();
             }
             if (failed) log('error', 'Some saved changes could not be restored. You can restore an earlier version in Settings.');
@@ -967,7 +978,8 @@ The page is rebuilt on every load by replaying all recorded run_js scripts, in o
                 syncWindows(); rememberWindows(false); flushContent();
                 const attached = historyImages(state.history);
                 const images = attached.length ? await Promise.all(attached.map(async image => ({ id: image.id, data: await imageDataUrl((await getImage(image)).blob) }))) : [];
-                const html = pageWith({ ...state, ...(images.length ? { images } : {}), savedAt: Date.now() });
+                const apps = [...windows.values()].filter(win => !win.el.matches(HARNESS)).map(win => win.el.id);
+                const html = pageWith({ ...state, ...(images.length ? { images } : {}), apps, savedAt: Date.now() });
                 const a = document.createElement('a');
                 a.href = URL.createObjectURL(new Blob([html], { type: 'text/html' }));
                 a.download = `ouroboros_${new Date().toLocaleString('sv').replace(/[: ]/g, '-')}.html`;
@@ -980,7 +992,8 @@ The page is rebuilt on every load by replaying all recorded run_js scripts, in o
             const match = html.match(/<script\b(?=[^>]*\sid=["']ouroboros-state["'])(?=[^>]*\stype=["']application\/json["'])[^>]*>([\s\S]*?)<\/script\s*>/i);
             if (!match) throw new Error('Choose an HTML file exported by Ouroboros.');
             const data = JSON.parse(match[1]);
-            if (!data || !Number.isFinite(data.savedAt) || !Array.isArray(data.history) || !Array.isArray(data.mutations)) throw new Error('Invalid workspace data.');
+            if (!data || !Number.isFinite(data.savedAt) || !Array.isArray(data.history) || !Array.isArray(data.mutations)
+                || (data.apps !== undefined && (!Array.isArray(data.apps) || data.apps.some(id => typeof id !== 'string' || !id.trim())))) throw new Error('Invalid workspace data.');
             const position = n => Number.isInteger(n) && n >= 0 && n <= data.mutations.length;
             for (const h of data.history) {
                 if (!h || !['user', 'assistant'].includes(h.role) || typeof h.content !== 'string' || !Number.isFinite(h.task)
@@ -994,6 +1007,7 @@ The page is rebuilt on every load by replaying all recorded run_js scripts, in o
                     || (m.task !== undefined && !Number.isFinite(m.task))) throw new Error('Invalid workspace record.');
                 if (m.apps !== undefined && (typeof m.code !== 'string' || !Array.isArray(m.apps) || !m.apps.length || m.apps.some(id => typeof id !== 'string' || !id.trim()))) throw new Error('Invalid app source association.');
                 if (m.test !== undefined && (typeof m.code !== 'string' || typeof m.test !== 'boolean')) throw new Error('Invalid verification marker.');
+                if (m.replaces !== undefined && (m.replaces !== true || typeof m.code !== 'string' || m.apps?.length !== 1)) throw new Error('Invalid replacement marker.');
                 if (typeof m.code === 'string') new AsyncFunction(m.code);
                 if (m.layout) {
                     const r = m.layout;
@@ -1008,16 +1022,16 @@ The page is rebuilt on every load by replaying all recorded run_js scripts, in o
                 if (!packed) throw new Error(`Missing image: ${image.name}`);
                 imageBlob(packed.data);
             }
-            return { history: data.history, mutations: data.mutations, ...(images.length ? { images } : {}) };
+            return { history: data.history, mutations: data.mutations, ...(images.length ? { images } : {}), ...(data.apps ? { apps: data.apps } : {}) };
         }
 
         // Every canvas swap writes the next content in one go, so the current canvas survives a storage failure, then reloads to replay it from the pristine page.
-        // backup becomes the import backup: omitted keeps the current one, null clears it. onWritten runs once the write has succeeded.
-        async function restart(next, backup = importBackup, onWritten = () => {}) {
-            localStorage.setItem(CONTENT_KEY, JSON.stringify(backup ? { ...next, importBackup: backup } : next));
+        // onWritten runs once the write has succeeded.
+        async function restart(next, onWritten = () => {}) {
+            localStorage.setItem(CONTENT_KEY, JSON.stringify(next));
             cancelSave(); onWritten();
             busy = true; draftImages = [];
-            if (imageDatabase) await pruneImages(next, backup).catch(() => {});
+            if (imageDatabase) await pruneImages(next).catch(() => {});
             location.reload();
         }
 
@@ -1034,27 +1048,45 @@ The page is rebuilt on every load by replaying all recorded run_js scripts, in o
                 for (const image of prepared) await imageRequest('readwrite', store => store.put(image.blob, [CONTENT_KEY, image.id]));
                 history = history.map(message => message.images ? { ...message, images: message.images.map(image => ({ ...image, id: replacements.get(image.id) })) } : message);
             }
-            await restart({ history, mutations: next.mutations }, state);
+            await restart({ history, mutations: next.mutations });
+        }
+
+        // Importing into a canvas that already has apps appends the file's records to the canvas's as one history step, so undo takes the whole import back.
+        // A canvas app whose id the file has had ends up as the file has it: it is uninstalled first, then the file's own records decide it. Other canvas apps are left alone.
+        function mergeImport(imported, name) {
+            const task = Date.now(), harness = id => !!id && !!$(id)?.matches(HARNESS);
+            const records = imported.mutations.filter(m => !m.test && !harness(m.layout?.id ?? m.data?.id));   // the canvas keeps its own core and settings colours
+            const listed = imported.apps && new Set(imported.apps);   // exports list the apps they end with; older files do not
+            const had = new Set([...(listed ?? []), ...records.flatMap(m => m.layout ? [m.layout.id] : m.apps ?? [])].filter(id => !harness(id)));
+            if (!(listed ?? had).size) throw new Error(`${name} has no apps to add.`);
+            const taken = [...had].filter(id => windows.has(id));
+            // Data the canvas still keeps under such an id, or under a data key the file also has, is split off too, so the file's version never reads it.
+            const stale = [...new Set([...had, ...records.flatMap(m => m.data ? [m.data.id] : [])])].filter(id => !windows.has(id) && tileData.has(id));
+            const mutations = [...state.mutations, ...taken.map(id => ({ task, apps: [id], code: removalScript(id), replaces: true })), ...stale.map(id => ({ task, apps: [id], code: '', replaces: true })), ...records.map(m => typeof m.code === 'string' ? { ...m, task } : m)];
+            const titles = ids => ids.map(id => windows.get(id).title).join(', ');
+            const replaced = titles(listed ? taken.filter(id => listed.has(id)) : []), removed = titles(listed ? taken.filter(id => !listed.has(id)) : []), matched = titles(listed ? [] : taken);
+            const warning = [replaced && `${replaced} will be replaced by the file's version.`, removed && `${removed} will be removed, as in the file.`, matched && `${matched} will be replaced or removed to match the file.`].filter(Boolean).join(' ');
+            const summary = [`Imported the apps from ${name}.`, replaced && `Replaced ${replaced}.`, removed && `Removed ${removed}.`, matched && `Replaced or removed ${matched} to match the file.`].filter(Boolean).join(' ');
+            const history = [...state.history, { role: 'user', content: `Import ${name}`, task, before: state.mutations.length }, { role: 'assistant', content: summary, task, revision: mutations.length }].slice(-20);
+            return { warning, next: { history, mutations } };
         }
 
         async function importHtml(file) {
             if (!file || locked()) return;
             importing = true; renderControls(); els.status.textContent = 'Reading import…';
             try {
-                const next = readImport(await file.text());
-                if (!confirm(`Import ${file.name}? This replaces the canvas and saves a backup. Imported tiles run JavaScript; only import files you trust. API settings and usage stay on this device.`)) return;
-                await replaceWorkspace(next);
+                const imported = readImport(await file.text()), trust = 'Imported tiles run JavaScript; only import files you trust.';
+                if (state.history.length || state.mutations.some(m => typeof m.code === 'string' || m.data)) {
+                    const { warning, next } = mergeImport(imported, file.name);
+                    if (!confirm(`Add the apps from ${file.name} to this canvas?${warning ? ` ${warning}` : ''} ${trust}`)) return;
+                    await restart(next);
+                } else {
+                    // An empty canvas has nothing to keep, so it takes the file as it is, conversation and restore points included.
+                    if (!confirm(`Import ${file.name}? ${trust}`)) return;
+                    await replaceWorkspace(imported);
+                }
             } catch (e) { log('error', `Could not import workspace: ${e.message}`); }
             finally { importing = false; $('import-file').value = ''; if (!busy) { renderControls(); pruneImages().catch(() => {}); } }
-        }
-
-        async function restoreImportBackup() {
-            if (!importBackup || locked()) return;
-            if (!confirm('Restore the backup? The current canvas will become the new backup. API settings and usage are kept.')) return;
-            importing = true; renderControls();
-            try { await replaceWorkspace(importBackup); }
-            catch (e) { log('error', `Could not restore backup: ${e.message}`); }
-            finally { importing = false; if (!busy) renderControls(); }
         }
 
         async function restoreVersion(revision, historyLength) {
@@ -1075,8 +1107,8 @@ The page is rebuilt on every load by replaying all recorded run_js scripts, in o
             const message = embedded.savedAt
                 ? 'Reset to the exported snapshot? Everything done since the export is discarded; settings are kept.'
                 : 'Reset the page to its pristine state? Mutations and history are cleared; settings are kept.';
-            if (!confirm(message + (importBackup ? ' The import backup will also be cleared.' : ''))) return;
-            try { await restart({ history: embedded.history, mutations: embedded.mutations }, null, () => { activity.length = 0; saveActivity(); }); }
+            if (!confirm(message)) return;
+            try { await restart({ history: embedded.history, mutations: embedded.mutations }, () => { activity.length = 0; saveActivity(); }); }
             catch (e) { log('error', `Could not reset canvas: ${e.message}`); }
         }
 
@@ -1444,7 +1476,7 @@ The page is rebuilt on every load by replaying all recorded run_js scripts, in o
             const prompt = `Uninstall ${win.title}`, summary = 'Tile uninstalled.';
             try {
                 win.el.remove();
-                state.mutations.push({ task, apps: [id], code: `document.getElementById(${JSON.stringify(id)})?.remove();` });
+                state.mutations.push({ task, apps: [id], code: removalScript(id) });
                 syncWindows(); rememberWindows();
                 saveTask(task, prompt, summary, before);
                 log('user', prompt, task); log('assistant', summary, task); renderControls();
@@ -1683,7 +1715,7 @@ The page is rebuilt on every load by replaying all recorded run_js scripts, in o
             els.btn.disabled = els.prompt.disabled = lock && !running;
             $('attach-images-btn').disabled = lock || draftImages.length >= MAX_IMAGES;
             for (const button of $('draft-images').querySelectorAll('button')) button.disabled = lock;
-            for (const id of ['export-btn', 'import-btn', 'import-backup-btn', 'reset-btn', 'save-btn']) $(id).disabled = lock;
+            for (const id of ['export-btn', 'import-btn', 'reset-btn', 'save-btn']) $(id).disabled = lock;
             for (const button of document.querySelectorAll('.window-controls button, .tile-face')) button.disabled = busy || importing;
             const last = $(`task-${state.history.at(-1)?.task}`);
             els.undo.hidden = running || busy || importing || !last || !Number.isInteger(state.history.findLast(h => h.role === 'user')?.before);
@@ -1756,8 +1788,6 @@ The page is rebuilt on every load by replaying all recorded run_js scripts, in o
             $('export-btn').onclick = exportHtml;
             $('import-btn').onclick = () => $('import-file').click();
             $('import-file').onchange = e => importHtml(e.target.files[0]);
-            $('import-backup-btn').hidden = !importBackup;
-            $('import-backup-btn').onclick = restoreImportBackup;
             $('reset-btn').onclick = reset;
             $('rollback-btn').onclick = () => {
                 const index = Number($('history-version').value), entry = state.history[index];
