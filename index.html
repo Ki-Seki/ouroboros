@@ -1516,7 +1516,8 @@ The page is rebuilt on every load by replaying all recorded run_js scripts, in o
                 const face = e.target.closest('.tile-face'), back = e.target.closest('[data-window-action]');
                 if (face) focusApp(face.closest('.desktop-window').id);
                 if (back?.dataset.windowAction === 'focus') { focusApp(back.closest('.desktop-window').id); return; }
-                if (back || (desktop.classList.contains('has-focus') && !e.target.closest('.desktop-window'))) returnHome();
+                // The path is taken when the click happens, so a control that re-renders itself on click still counts as inside its window.
+                if (back || (desktop.classList.contains('has-focus') && !e.composedPath().some(node => node.classList?.contains('desktop-window')))) returnHome();
             });
             desktop.addEventListener('wheel', e => {
                 if (expanded && atHome) return;
