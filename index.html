@@ -55,15 +55,51 @@
         #window-layer .tile-title { max-width: 78%; font-size: 18px; font-weight: 500; line-height: 1.3; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
         #window-layer :is(.tile-face, .tile-title)[hidden] { display: none; }
         #map-toolbar { position: fixed; inset: 0 0 auto; z-index: 10; display: flex; align-items: center; justify-content: space-between; height: 64px; padding: 0 24px; gap: 12px; }
-        #map-toolbar button { min-width: 44px; min-height: 44px; border: 1px solid #ffffffd9; border-radius: 999px; color: #414b5a; background: #ffffffc7; backdrop-filter: blur(12px) saturate(1.2); box-shadow: 0 2px 12px #18233308, inset 0 1px 0 #fff; transition: background .15s, color .15s; }
-        #map-toolbar button:hover { color: #202632; background: #fffffff0; }
+        #map-toolbar > button { min-width: 44px; min-height: 44px; border: 1px solid #ffffffd9; border-radius: 999px; color: #414b5a; background: #ffffffc7; backdrop-filter: blur(12px) saturate(1.2); box-shadow: 0 2px 12px #18233308, inset 0 1px 0 #fff; transition: background .15s, color .15s; }
+        #map-toolbar > button:hover { color: #202632; background: #fffffff0; }
         #map-toolbar button:focus-visible { outline: 2px solid #697382; outline-offset: 2px; }
-        .no-animations #map-toolbar button { backdrop-filter: none; background: #fff; }
-        @media (prefers-reduced-transparency: reduce), (prefers-contrast: more) { #map-toolbar button, #window-layer .tile-face { backdrop-filter: none; background: #fff; border-color: #a1a8b2; } }
+        .no-animations #map-toolbar > button { backdrop-filter: none; background: #fff; }
+        @media (prefers-reduced-transparency: reduce), (prefers-contrast: more) { #map-toolbar > button, #window-layer .tile-face { backdrop-filter: none; background: #fff; border-color: #a1a8b2; } }
         #map-home { display: flex; align-items: center; gap: 10px; padding: 0 12px; font-size: 16px; font-weight: 500; letter-spacing: -.03em; }
         #map-home .ui-icon { width: 28px; height: 28px; }
-        #map-toolbar #voice-live { display: grid; place-items: center; color: #fff; background: var(--live, #24695b); border-color: transparent; }
-        #map-toolbar #voice-live[hidden] { display: none; }
+        #map-toolbar [hidden] { display: none !important; }
+        #voice-start { display: grid; place-items: center; }
+        #voice-island { position: absolute; top: 10px; left: 50%; translate: -50% 0; display: flex; align-items: center; gap: 6px; animation: voice-in .36s cubic-bezier(.2, .9, .3, 1.15); }
+        #voice-island :where(button), #voice-sheet :where(button) { display: flex; align-items: center; justify-content: center; flex: none; min-width: 0; padding: 0; border: 0; border-radius: 999px; color: inherit; background: none; font: inherit; }
+        .voice-pill, #voice-task { color: #fff; background: #1c1c1e; box-shadow: 0 8px 28px #18233333, 0 0 0 1px #ffffff14; }
+        .voice-pill { display: flex; align-items: center; gap: 4px; width: 184px; height: 44px; padding: 4px; border-radius: 999px; transition: width .36s cubic-bezier(.2, .9, .3, 1); }
+        #voice-island[data-wide] .voice-pill { width: min(420px, 100vw - 384px); }
+        #voice-main { flex: 1; justify-content: flex-start; gap: 10px; height: 36px; padding: 0 6px 0 8px; text-align: left; }
+        #voice-glyph { display: grid; place-items: center; flex: none; width: 20px; height: 20px; contain: strict; }
+        #voice-glyph > * { grid-area: 1 / 1; }
+        #voice-meter { display: flex; align-items: center; gap: 2px; height: 18px; }
+        #voice-meter i { width: 3px; height: 6px; border-radius: 2px; background: currentColor; }
+        #voice-meter i:nth-child(even) { height: 10px; }
+        #voice-meter i:nth-child(3) { height: 14px; }
+        .voice-ring { width: 18px; height: 18px; border: 2px solid #ffffff40; border-top-color: #fff; border-radius: 50%; animation: voice-spin .9s linear infinite; }
+        #voice-island:not([data-glyph="meter"]) #voice-meter, #voice-island:not([data-glyph="ring"]) #voice-glyph > .voice-ring, #voice-island:is([data-glyph="meter"], [data-glyph="ring"]) #voice-icon { display: none; }
+        :is(#voice-icon, #voice-task-icon, #voice-end) .ui-icon { width: 18px; height: 18px; }
+        #voice-text { display: grid; flex: 1; min-width: 0; font-size: 13px; line-height: 1.3; }
+        #voice-text > span { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+        #voice-text > [data-quiet] { color: #ffffffa6; font-size: 11px; }
+        #voice-text[data-tail] > #voice-bottom { direction: rtl; text-align: left; }
+        #voice-open { height: 28px; padding: 0 12px; background: #ffffff26; font-size: 12px; font-weight: 600; }
+        #voice-end { width: 36px; height: 36px; background: #ffffff1f; }
+        #voice-task { position: relative; width: 44px; height: 44px; font-size: 12px; font-weight: 600; font-variant-numeric: tabular-nums; animation: voice-in .3s cubic-bezier(.2, .9, .3, 1.15); }
+        #voice-task > .voice-ring { position: absolute; inset: 6px; width: auto; height: auto; }
+        #voice-task:not([data-state="running"]) > :is(.voice-ring, #voice-count), #voice-task[data-state="running"] > #voice-task-icon { display: none; }
+        #voice-sheet { --from: .96; position: absolute; top: 62px; left: 50%; translate: -50% 0; display: flex; flex-direction: column; gap: 12px; width: min(420px, 100vw - 32px); max-height: min(60vh, 440px); padding: 16px; border-radius: 22px; color: #1d1d1f; background: #fff; box-shadow: 0 16px 48px #1823332e, 0 0 0 1px #18233310; font-size: 14px; transform-origin: top; animation: voice-in .24s ease-out; }
+        #voice-transcript { display: grid; align-content: start; gap: 8px; min-height: 0; overflow-y: auto; overscroll-behavior: contain; scrollbar-width: thin; }
+        #voice-transcript:empty { display: none; }
+        #voice-transcript p { margin: 0; color: #6e6e73; line-height: 1.45; white-space: pre-wrap; overflow-wrap: anywhere; }
+        #voice-transcript p.is-user { color: #1d1d1f; }
+        #voice-transcript p.is-task { font-size: 12px; }
+        .voice-actions { display: flex; justify-content: flex-end; gap: 8px; }
+        #voice-sheet .voice-actions button { min-height: 36px; padding: 0 16px; color: #1d1d1f; background: #f2f2f5; font-size: 14px; font-weight: 600; }
+        #voice-sheet #voice-mute[aria-pressed="true"] { color: #fff; background: #1c1c1e; }
+        #voice-sheet #voice-hangup { color: #b44443; }
+        @keyframes voice-in { from { opacity: 0; scale: var(--from, .7); } }
+        @keyframes voice-spin { to { rotate: 360deg; } }
         .desktop-window button, .desktop-window summary { touch-action: manipulation; }
         .desktop-window button:disabled { opacity: .45; cursor: default; }
         .desktop-window :is(button, summary, input, textarea, select) { border-radius: 10px; box-shadow: none; }
@@ -184,10 +220,11 @@
         .core-panel .core-meta { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 4px 12px; margin-top: 9px; color: var(--muted); font-size: 11px; }
         .core-panel #execute-btn.is-running { background: #fff; border-color: var(--line); }
         .core-panel #model-btn { max-width: 190px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-        .core-panel #voice-btn[aria-pressed="true"] { color: #fff; background: var(--accent); box-shadow: 0 0 0 4px color-mix(in srgb, var(--accent) 20%, transparent); }
-        .core-panel .voice-call { display: grid; gap: 6px; margin: 0 0 20px; padding: 2px 0 2px 12px; border-left: 2px solid var(--line); }
+        .core-panel .voice-call { margin: 0 0 20px; color: var(--muted); font-size: 12px; }
         .core-panel .core-task + .voice-call { margin-top: 20px; }
-        .core-panel .voice-call p { margin: 0; color: var(--muted); font-size: 13px; white-space: pre-wrap; }
+        .core-panel .voice-call > summary { width: fit-content; }
+        .core-panel .voice-call > div { display: grid; gap: 6px; margin-top: 8px; padding-left: 12px; border-left: 1px solid var(--line); }
+        .core-panel .voice-call p { margin: 0; font-size: 13px; white-space: pre-wrap; }
         .core-panel .voice-call p.is-user { color: var(--ink); }
         .core-panel .task-prompt.is-voice { display: flex; align-items: flex-start; gap: 8px; }
         .core-panel .voice-mark { flex: none; padding-top: 2px; color: var(--muted); }
@@ -195,6 +232,11 @@
         @media (max-width: 599px) {
             #map-toolbar { height: 60px; padding: 0 8px; }
             #map-home { font-size: 14px; }
+            #voice-island { position: static; translate: none; flex: 1; justify-content: flex-end; min-width: 0; }
+            .voice-pill { width: 168px; min-width: 0; }
+            #voice-island[data-wide] .voice-pill { width: 100%; }
+            #map-toolbar:has(#voice-island[data-wide]:not([hidden])) #map-home-title { display: none; }
+            #voice-sheet { top: 58px; right: 8px; left: 8px; translate: none; width: auto; }
             #window-layer > .desktop-window { font-size: 15px; }
             .desktop-window .ui-body, .core-panel #activity-log { padding: 20px; }
             .desktop-window .ui-label, .desktop-window .ui-caption { font-size: 13px; }
@@ -279,10 +321,9 @@
                 <div id="draft-images" class="draft-images" aria-label="Attached images" hidden></div>
                 <textarea id="user-prompt" rows="2" aria-label="Your instruction" placeholder="Describe an app or a change…"></textarea>
                 <p id="image-status" role="status" hidden></p>
-                <div class="flex items-center mt-2 gap-2">
+                <div class="flex justify-between items-center mt-2 gap-2">
                     <button id="attach-images-btn" type="button" class="ui-icon-button" aria-label="Attach images" title="Attach images" disabled></button>
                     <input id="image-files" type="file" accept="image/png,image/jpeg,image/webp" multiple hidden>
-                    <button id="voice-btn" type="button" class="ui-icon-button ml-auto" aria-label="Start voice" title="Start voice" aria-pressed="false" disabled></button>
                     <button id="execute-btn" type="button" class="ui-button" disabled>Send ↑</button>
                 </div>
             </div>
@@ -343,10 +384,26 @@
     </div></main>
     <header id="map-toolbar">
         <button id="map-home" type="button" aria-label="Restoring workspace" title="Restoring workspace" disabled><span id="map-home-icon" aria-hidden="true"></span><span id="map-home-title">Restoring…</span></button>
-        <button id="voice-live" type="button" aria-label="End voice" title="End voice" hidden></button>
+        <!-- Voice island: the live call, over every app. One pill for the conversation, and a circle for a change that runs while it talks. -->
+        <div id="voice-island" role="group" aria-label="Voice" hidden>
+            <div class="voice-pill">
+                <button id="voice-main" type="button" aria-expanded="false" aria-controls="voice-sheet">
+                    <span id="voice-glyph" aria-hidden="true"><span id="voice-meter"><i></i><i></i><i></i><i></i><i></i></span><span class="voice-ring"></span><span id="voice-icon"></span></span>
+                    <span id="voice-text"><span id="voice-top"></span><span id="voice-bottom"><span dir="auto"></span></span></span>
+                </button>
+                <button id="voice-open" type="button" hidden>Open</button>
+                <button id="voice-end" type="button" aria-label="End voice" title="End voice"></button>
+            </div>
+            <button id="voice-task" type="button" hidden><span class="voice-ring"></span><span id="voice-count"></span><span id="voice-task-icon"></span></button>
+        </div>
+        <div id="voice-sheet" hidden>
+            <div id="voice-transcript" aria-label="Voice conversation"></div>
+            <div class="voice-actions"><button id="voice-mute" type="button" aria-pressed="false">Mute</button><button id="voice-hangup" type="button">End</button></div>
+        </div>
+        <button id="voice-start" type="button" aria-label="Start voice" title="Start voice" hidden></button>
     </header>
     <!-- Host classes toggled at runtime, listed once so the Tailwind CDN compiles them up front instead of rebuilding its stylesheet the first time each appears mid-animation. -->
-    <span hidden aria-hidden="true" class="has-focus has-overlay is-expanded is-switching is-panning is-focused no-animations desktop-window is-dragging is-running is-error core-note core-task task-prompt task-result task-steps step-list tool-entry tool-status message-images voice-call is-user is-voice voice-mark task-live"></span>
+    <span hidden aria-hidden="true" class="has-focus has-overlay is-expanded is-switching is-panning is-focused no-animations desktop-window is-dragging is-running is-error core-note core-task task-prompt task-result task-steps step-list tool-entry tool-status message-images voice-call is-user is-task is-voice voice-mark task-live"></span>
 
     <!-- EMBEDDED SYSTEM PROMPT (editable by users) -->
     <script type="text/plain" id="ouroboros-system_prompt">
@@ -888,6 +945,8 @@ The page is rebuilt on every load by replaying all recorded run_js scripts, in o
             controller = new AbortController();
             renderControls();
             const task = Date.now();
+            liveTask = { task, state: 'running', steps: 0, step: '', apps: [], existing: new Set(windows.keys()) };
+            renderIsland();
             const trace = { task, model: clip(redact(settings.model), 200), contract: fingerprint($('ouroboros-system_prompt').textContent + JSON.stringify(TOOL_SCHEMAS)), startedAt: task, status: 'running', prompt: clip(redact(prompt), 1000), calls: [], requests: [] };
             activity.push(trace); saveActivity();
             const before = state.mutations.length;
@@ -943,6 +1002,7 @@ The page is rebuilt on every load by replaying all recorded run_js scripts, in o
                 Object.assign(trace, { durationMs: Date.now() - task, usage: taskUsage, saved, summary: clip(redact(summary), 2000) });
                 saveActivity();
                 controller = null;
+                if (liveTask?.task === task) Object.assign(liveTask, { state: { complete: 'done', stopped: 'stopped' }[trace.status] ?? 'failed', until: Date.now() + 20000 });
                 if (!responded && images.length && !draftImages.length && !els.prompt.value) {
                     draftImages = [...images]; els.prompt.value = prompt; resizePrompt(); renderDraftImages();
                 }
@@ -958,7 +1018,9 @@ The page is rebuilt on every load by replaying all recorded run_js scripts, in o
         // --- VOICE ---
         // A live conversation with a realtime voice model over WebRTC. The voice model talks, shows apps and reads them on this page, which is
         // instant; every change goes to the agent loop through run_task, so spoken requests become ordinary saved tasks.
-        let voice = null;
+        // The call lives in the island at the top of the map, over every app; the conversation keeps one folded record of it.
+        let voice = null, voiceNotice = null, liveTask = null, islandTimer = 0;   // the call, a short note after it fails, and the task the island follows
+        const voiceSupported = !!(window.RTCPeerConnection && navigator.mediaDevices?.getUserMedia);
         const voiceTools = [
             ["run_task", "Make, change or remove apps, their look or their content, or answer what read_app cannot. Pass the person's request in their own words and language, with details they gave earlier in the call.", { request: { type: 'string' } }],
             ['read_app', 'Read what one app shows and has saved, by its title, to answer a question about it.', { app: { type: 'string' } }],
@@ -979,7 +1041,6 @@ The page is rebuilt on every load by replaying all recorded run_js scripts, in o
                 ...(recent.length ? [`Recent conversation:\n${recent.join('\n')}`] : []),
             ].join('\n\n');
         }
-        const voiceStatus = text => { if (!voice) return; voice.status = text; if (!controller && !busy) els.status.textContent = text; };
         const voiceSend = (session, event) => { if (voice === session && session.channel?.readyState === 'open') session.channel.send(JSON.stringify(event)); };
         // Answers a tool call. When the voice should speak about it, a response is asked for now, or when the one under way ends.
         function voiceAnswer(session, callId, output, speak = true) {
@@ -989,31 +1050,58 @@ The page is rebuilt on every load by replaying all recorded run_js scripts, in o
             else voiceSend(session, { type: 'response.create' });
         }
         function closeVoice(session) {
+            cancelAnimationFrame(session.frame);
             session.channel?.close(); session.pc?.close();
             session.stream?.getTracks().forEach(track => track.stop());
             if (session.audio) session.audio.srcObject = null;
+            session.context?.close().catch(() => {});
         }
         function stopVoice(message = '') {
             const session = voice;
             if (!session) return;
             voice = null; closeVoice(session);
-            if (message) log('error', message);
+            if (session.record) {
+                const seconds = Math.round((Date.now() - session.started) / 1000);
+                session.record.firstElementChild.textContent = `Voice call · ${seconds < 60 ? `${Math.max(seconds, 1)} s` : `${Math.round(seconds / 60)} min`}`;
+            }
+            if (message) { log('error', message); voiceNotice = { text: message, until: Date.now() + 6000 }; }
             renderControls();
         }
 
+        // The island's meter follows whoever is talking, the person or the voice.
+        function meterSource(session, stream) {
+            try {
+                const node = session.context.createAnalyser();
+                node.fftSize = 512; node.samples = new Uint8Array(node.fftSize);
+                session.context.createMediaStreamSource(stream).connect(node);
+                return node;
+            } catch { return null; }
+        }
+        const loudness = node => {
+            if (!node) return 0;
+            node.getByteTimeDomainData(node.samples);
+            let sum = 0;
+            for (const sample of node.samples) sum += (sample - 128) ** 2;
+            return Math.sqrt(sum / node.samples.length) / 128;
+        };
+
         async function startVoice() {
-            if (voice || locked()) return;
+            if (voice || busy || importing) return;
             if (!settings.apiKey || !settings.voiceModel) {
                 focusApp('ouroboros-settings');
                 $('api-key').focus();
                 return log('error', 'Set your API key and voice model to talk with Ouroboros.');
             }
-            const session = voice = { status: 'Connecting…', calls: new Set() };
+            const session = voice = { status: 'Connecting…', calls: new Set(), heard: '', said: '', quietAt: 0, begun: Date.now(), taskLines: new Map() };
+            voiceNotice = null; $('voice-transcript').replaceChildren();
+            try { session.context = new AudioContext(); } catch {}   // made during the click, which lets it run
             renderControls();
             const ended = () => { if (voice === session) return false; closeVoice(session); return true; };   // the person ended the call while it was connecting
             try {
                 session.stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true } });
                 if (ended()) return;
+                for (const track of session.stream.getAudioTracks()) track.enabled = !session.muted;
+                session.mic = meterSource(session, session.stream);
                 // The API key never leaves this device except to OpenAI: it only mints a short-lived key for this one call.
                 const base = settings.apiBase.replace(/\/+$/, '');
                 const secret = await fetch(`${base}/realtime/client_secrets`, {
@@ -1026,11 +1114,11 @@ The page is rebuilt on every load by replaying all recorded run_js scripts, in o
                 if (ended()) return;
                 const pc = session.pc = new RTCPeerConnection();
                 session.audio = new Audio(); session.audio.autoplay = true;
-                pc.ontrack = event => { session.audio.srcObject = event.streams[0]; };
+                pc.ontrack = event => { session.audio.srcObject = event.streams[0]; session.speaker = meterSource(session, event.streams[0]); };
                 pc.onconnectionstatechange = () => { if (pc.connectionState === 'failed' && voice === session) stopVoice('The voice connection was lost.'); };
                 pc.addTrack(session.stream.getAudioTracks()[0], session.stream);
                 const channel = session.channel = pc.createDataChannel('oai-events');
-                channel.onopen = () => { if (voice === session) voiceStatus('Listening'); };
+                channel.onopen = () => { if (voice !== session) return; session.status = 'Listening'; session.started = Date.now(); renderIsland(); };
                 channel.onclose = () => { if (voice === session) stopVoice('The voice session ended.'); };   // the server ended it, for instance at its time limit
                 channel.onmessage = event => { try { voiceEvent(JSON.parse(event.data), session); } catch (e) { console.error('Voice event failed:', e); } };
                 const offer = await pc.createOffer();
@@ -1046,16 +1134,20 @@ The page is rebuilt on every load by replaying all recorded run_js scripts, in o
             }
         }
 
+        // Live captions: what the person said this turn, and what the voice is saying. They fade once nobody has spoken for a moment.
         function voiceEvent(event, session) {
             if (voice !== session) return;
-            if (event.type === 'conversation.item.input_audio_transcription.completed') {
-                if (session.request && sameWords(event.transcript, session.request)) session.request = null;   // the task already shows it
-                else voiceLine('user', event.transcript);
-            }
-            else if (event.type === 'response.created') session.responding = true;
-            else if (event.type === 'response.output_audio_transcript.delta') voiceStatus('Speaking…');
-            else if (event.type === 'response.output_audio_transcript.done') voiceLine('assistant', event.transcript);
-            else if (event.type === 'response.done') {
+            const { type } = event;
+            if (type === 'input_audio_buffer.speech_started') Object.assign(session, { speaking: true, heard: '', said: '' });
+            else if (type === 'input_audio_buffer.speech_stopped') session.speaking = false;
+            else if (type === 'conversation.item.input_audio_transcription.delta') session.heard += event.delta ?? '';
+            else if (type === 'conversation.item.input_audio_transcription.completed') { session.heard = event.transcript?.trim() ?? ''; voiceLine(session, 'user', session.heard); }
+            else if (type === 'response.created') Object.assign(session, { responding: true, said: '' });
+            else if (type === 'response.output_audio_transcript.delta') session.said += event.delta ?? '';
+            else if (type === 'response.output_audio_transcript.done') { session.said = event.transcript?.trim() || session.said; voiceLine(session, 'assistant', session.said); }
+            else if (type === 'output_audio_buffer.started') session.playing = true;
+            else if (type === 'output_audio_buffer.stopped' || type === 'output_audio_buffer.cleared') session.playing = false;
+            else if (type === 'response.done') {
                 session.responding = false;
                 const usage = event.response?.usage;
                 if ([usage?.input_tokens, usage?.output_tokens].every(n => Number.isInteger(n) && n >= 0)) {
@@ -1064,8 +1156,10 @@ The page is rebuilt on every load by replaying all recorded run_js scripts, in o
                 }
                 for (const item of event.response?.output ?? []) if (item.type === 'function_call' && item.status !== 'incomplete') voiceCall(item, session);
                 if (session.replyPending) { session.replyPending = false; voiceSend(session, { type: 'response.create' }); }
-                voiceStatus('Listening');
-            } else if (event.type === 'error') log('error', `Voice: ${event.error?.message || 'the voice model reported an error.'}`);
+            } else if (type === 'error') log('error', `Voice: ${event.error?.message || 'the voice model reported an error.'}`);
+            else return;
+            session.quietAt = Date.now() + 4000;
+            renderIsland();
         }
 
         // Reading and showing apps answer at once. A spoken request runs as an ordinary task, and its summary goes back for the voice to say.
@@ -1094,7 +1188,6 @@ The page is rebuilt on every load by replaying all recorded run_js scripts, in o
             const request = String(args.request ?? '').trim();
             if (!request) return voiceAnswer(session, item.call_id, { ok: false, error: 'No request was given.' });
             if (locked()) return voiceAnswer(session, item.call_id, { ok: false, error: 'Another change is still running. Try again when it finishes.' });
-            session.request = unsay(request) ? null : request;
             const summary = clip(await runTask(request, [], true), 2000);
             voiceSend(session, { type: 'session.update', session: { type: 'realtime', instructions: voiceInstructions() } });   // it now knows the apps the task made
             voiceAnswer(session, item.call_id, { ok: true, summary });
@@ -1569,6 +1662,7 @@ The page is rebuilt on every load by replaying all recorded run_js scripts, in o
                 return;
             }
             camera.focus = id;
+            renderIsland();   // an app that is already open needs no Open on the island
             moveCamera({ x: win.x, y: win.y, zoom: focusEnd(), expansion: Number(expanded) }, animate);
         }
 
@@ -1857,34 +1951,110 @@ The page is rebuilt on every load by replaying all recorded run_js scripts, in o
             if (follow || kind === 'user') els.log.scrollTop = els.log.scrollHeight;
         }
 
-        const sameWords = (a, b) => { const words = text => String(text).toLowerCase().replace(/[\s\p{P}]+/gu, ''); return words(a) === words(b); };
-        // A spoken request is shown once, as the task it starts: its line in the call transcript goes, with the acknowledgement after it.
-        function unsay(request) {
-            const call = els.log.lastElementChild;
-            if (!call?.classList.contains('voice-call')) return false;
-            const line = [...call.querySelectorAll('p.is-user')].findLast(p => sameWords(p.textContent, request));
-            if (!line) return false;
-            while (line.nextSibling) line.nextSibling.remove();
-            line.remove();
-            if (!call.childElementCount) call.remove();
-            return true;
+        // A finished turn goes to the island's sheet, and to one folded record of the call in the conversation. Only the tasks are saved.
+        function voiceLine(session, role, text) {
+            if (!text) return;
+            const follow = nearBottom(), line = document.createElement('p');
+            if (role === 'user') line.className = 'is-user';
+            line.textContent = text;
+            if (!session.record) {
+                $('empty-state')?.remove();
+                session.record = document.createElement('details'); session.record.className = 'voice-call';
+                session.record.innerHTML = '<summary>Voice call</summary><div></div>';
+                els.log.append(session.record);
+            }
+            session.record.lastElementChild.append(line);
+            sheetLine(line.cloneNode(true));
+            if (follow) els.log.scrollTop = els.log.scrollHeight;
+        }
+        function sheetLine(line) {
+            const list = $('voice-transcript'), follow = list.scrollHeight - list.scrollTop - list.clientHeight < 24;
+            list.append(line);
+            if (follow) list.scrollTop = list.scrollHeight;
         }
 
-        // The spoken turns of a call read as one quiet transcript between the tasks they lead to; only those tasks are saved.
-        function voiceLine(role, text) {
-            if (!text?.trim()) return;
-            const follow = nearBottom();
-            $('empty-state')?.remove();
-            let call = els.log.lastElementChild;
-            if (!call?.classList.contains('voice-call')) {
-                call = document.createElement('section'); call.className = 'voice-call'; call.setAttribute('aria-label', 'Voice conversation');
-                els.log.append(call);
+        // What the island says about a change: the app it makes or updates, and how far it has got.
+        function taskLabel(task) {
+            const id = task.apps.find(id => windows.has(id)), title = id && windows.get(id).title, made = id && !task.existing.has(id);
+            const steps = task.steps ? `${task.steps} step${task.steps === 1 ? '' : 's'}` : '';
+            if (task.state === 'running') return [title ? `${made ? 'Making' : 'Updating'} ${title}` : 'Working on it', [task.step, steps].filter(Boolean).join(' · ')];
+            if (task.state === 'done') return [title ? `${title} ${made ? 'is ready' : 'updated'}` : 'Done', steps];   // once it ends the island shows only the first part
+            return [task.state === 'stopped' ? 'Stopped' : "Couldn't finish", steps];
+        }
+
+        // The island shows the call as it is now: what is being said, else the change under way or just made, else that it is listening.
+        // While the call talks over a change, the change moves to a circle beside the pill.
+        function renderIsland() {
+            const session = voice, island = $('voice-island'), now = Date.now();
+            const notice = !session && voiceNotice?.until > now ? voiceNotice : null;
+            $('voice-start').hidden = !voiceSupported || !!session || busy;
+            island.hidden = !session && !notice;
+            $('voice-sheet').hidden = !session?.open;
+            $('voice-main').setAttribute('aria-expanded', String(!!session?.open));
+            clearTimeout(islandTimer);
+            if (island.hidden) return;
+            if (session && now >= session.quietAt && !session.speaking && !session.playing && !session.responding) session.heard = session.said = '';
+            const task = session && (liveTask?.state === 'running' || liveTask?.until > now) ? liveTask : null;
+            const talking = !!(session && (session.speaking || session.playing || session.heard || session.said));
+            let glyph = session?.muted ? 'muted' : 'meter', top = '', bottom = session?.muted ? 'Muted' : session?.status, quiet = 'top', tail = false, wide = true, app = null;
+            if (notice) { glyph = 'failed'; [top, bottom] = notice.text.includes(': ') ? notice.text.split(/: (.*)/s) : ['', notice.text]; bottom = bottom[0].toUpperCase() + bottom.slice(1); }
+            else if (talking && (session.heard || session.said)) { top = session.said ? session.heard : ''; bottom = session.said || session.heard; tail = true; }
+            else if (task && !talking) {
+                [top, bottom] = taskLabel(task); quiet = 'bottom';
+                if (task.state !== 'running') bottom = '';
+                glyph = { running: 'ring', done: 'done' }[task.state] ?? 'failed';
+                app = task.state === 'done' && task.apps.find(id => windows.has(id) && id !== camera.focus);
+            } else wide = !!session?.open;   // an open sheet hangs from a pill as wide as itself
+            if (island.dataset.glyph !== glyph) {
+                island.dataset.glyph = glyph;
+                if (!['meter', 'ring'].includes(glyph)) drawIcon($('voice-icon'), { muted: 'MicOff', done: 'Check', failed: 'CircleAlert' }[glyph]);
             }
-            const line = document.createElement('p');
-            if (role === 'user') line.className = 'is-user';
-            line.textContent = text.trim();
-            call.append(line);
-            if (follow) els.log.scrollTop = els.log.scrollHeight;
+            island.toggleAttribute('data-wide', wide);
+            $('voice-text').toggleAttribute('data-tail', tail);
+            updateValue($('voice-top'), 'textContent', top); $('voice-top').hidden = !top;
+            updateValue($('voice-bottom').firstElementChild, 'textContent', bottom);
+            $('voice-top').toggleAttribute('data-quiet', quiet === 'top'); $('voice-bottom').toggleAttribute('data-quiet', quiet === 'bottom' && !!top);
+            $('voice-open').hidden = !app; $('voice-end').hidden = !session;
+            const circle = $('voice-task'), state = task && ({ running: 'running', done: 'done' }[task.state] ?? 'failed');
+            circle.hidden = !(talking && task);
+            if (!circle.hidden) {
+                if (circle.dataset.state !== state) { circle.dataset.state = state; if (state !== 'running') drawIcon($('voice-task-icon'), state === 'done' ? 'Check' : 'CircleAlert'); }
+                updateValue($('voice-count'), 'textContent', task.steps ? String(task.steps) : '');
+                circle.title = taskLabel(task).filter(Boolean).join(' · '); circle.setAttribute('aria-label', circle.title);
+            }
+            if (session) {
+                if (task && (task.state === 'running' || task.task > session.begun)) {
+                    let line = session.taskLines.get(task.task);
+                    if (!line) { line = document.createElement('p'); line.className = 'is-task'; session.taskLines.set(task.task, line); sheetLine(line); }
+                    updateValue(line, 'textContent', taskLabel(task).filter(Boolean).join(' · '));
+                }
+                updateValue($('voice-mute'), 'textContent', session.muted ? 'Unmute' : 'Mute');
+                $('voice-mute').setAttribute('aria-pressed', String(!!session.muted));
+                if (glyph === 'meter' && !session.frame && !animationsDisabled()) session.frame = requestAnimationFrame(meterFrame);
+            }
+            const wake = [session?.heard || session?.said ? session.quietAt : 0, task && task.state !== 'running' ? task.until : 0, notice?.until ?? 0].filter(time => time > now);
+            if (wake.length) islandTimer = setTimeout(renderIsland, Math.min(...wake) - now + 20);
+        }
+
+        function meterFrame(now) {
+            const session = voice, bars = [...$('voice-meter').children];
+            if (!session || $('voice-island').dataset.glyph !== 'meter' || animationsDisabled()) {
+                if (session) session.frame = 0;
+                for (const bar of bars) bar.style.height = '';
+                return;
+            }
+            session.frame = requestAnimationFrame(meterFrame);
+            const level = Math.min(1, Math.max(session.muted ? 0 : loudness(session.mic), loudness(session.speaker)) * 6);
+            session.level = Math.max(level, (session.level ?? 0) * .86);   // rises at once and falls slowly
+            bars.forEach((bar, i) => updateValue(bar.style, 'height', `${Math.round(4 + 14 * session.level * [.55, .8, 1, .75, .5][i] * (.7 + .3 * Math.sin(now / 110 + i * 1.9)))}px`));
+        }
+
+        // The circle, or Open, shows what a change made; while it runs, or when it fails, the conversation where it reports.
+        function openLiveTask() {
+            const id = liveTask?.state === 'done' && liveTask.apps.find(id => windows.has(id));
+            focusApp(id || 'ouroboros-core');
+            if (liveTask && liveTask.state !== 'running') liveTask.until = 0;
+            renderIsland();
         }
 
         // While a task runs, one quiet line under its prompt says what it is doing; the final answer takes its place.
@@ -1903,6 +2073,10 @@ The page is rebuilt on every load by replaying all recorded run_js scripts, in o
             const target = steps?.querySelector('.step-list') || els.log;
             const title = { read_dom: 'Read page', read_app_source: 'Read app source', eval_js: 'Inspect page', run_js: 'Update app', test_js: 'Test app' }[name] || name;
             const subject = typeof args.selector === 'string' ? args.selector : typeof args.app_id === 'string' ? args.app_id : Array.isArray(args.app_ids) ? args.app_ids.filter(id => typeof id === 'string').join(', ') : '';
+            if (liveTask?.task === task) {
+                liveTask.step = title;
+                if (name === 'run_js' && Array.isArray(args.app_ids)) liveTask.apps.push(...args.app_ids.filter(id => typeof id === 'string'));
+            }
             const entry = document.createElement('details');
             entry.className = 'tool-entry';
             entry.innerHTML = `<summary>${esc(title)}<span class="tool-status">…</span></summary>`
@@ -1914,6 +2088,7 @@ The page is rebuilt on every load by replaying all recorded run_js scripts, in o
                 const all = target.children.length, failures = target.querySelectorAll(':scope > .is-error').length;
                 steps.hidden = false;
                 steps.querySelector('summary').textContent = `${all} step${all === 1 ? '' : 's'}${failures ? ` · ${failures} failed` : ''}`;
+                if (liveTask?.task === task) { liveTask.steps = all; renderIsland(); }
             };
             count();
             els.status.textContent = `${title}…`;
@@ -1965,22 +2140,16 @@ The page is rebuilt on every load by replaying all recorded run_js scripts, in o
             els.btn.classList.toggle('is-running', running);
             els.btn.disabled = els.prompt.disabled = lock && !running;
             $('attach-images-btn').disabled = lock || draftImages.length >= MAX_IMAGES;
-            const voiceButton = $('voice-btn'), talking = !!voice;
-            voiceButton.disabled = !talking && (lock || !window.RTCPeerConnection || !navigator.mediaDevices?.getUserMedia);
-            voiceButton.setAttribute('aria-pressed', String(talking));
-            voiceButton.title = talking ? 'End voice' : 'Start voice'; voiceButton.setAttribute('aria-label', voiceButton.title);
-            // While a call is live it can be ended from anywhere on the map, in the colour of the Ouroboros window.
-            $('voice-live').hidden = !talking;
-            $('voice-live').style.setProperty('--live', $('ouroboros-core').style.getPropertyValue('--tile'));
             for (const button of $('draft-images').querySelectorAll('button')) button.disabled = lock;
             for (const id of ['export-btn', 'import-btn', 'reset-btn', 'save-btn']) $(id).disabled = lock;
             for (const button of document.querySelectorAll('.window-controls button, .tile-face')) button.disabled = busy || importing;
             const last = $(`task-${state.history.at(-1)?.task}`);
             els.undo.hidden = running || busy || importing || !last || !Number.isInteger(state.history.findLast(h => h.role === 'user')?.before);
             if (last) last.append(els.undo);
-            els.status.textContent = running ? 'Thinking…' : busy ? 'Restoring…' : preparingImages ? 'Preparing images…' : exporting ? 'Exporting…' : voice ? voice.status : 'Ready';
+            els.status.textContent = running ? 'Thinking…' : busy ? 'Restoring…' : preparingImages ? 'Preparing images…' : exporting ? 'Exporting…' : 'Ready';
             renderHistory();
             renderTiles();
+            renderIsland();
         }
 
         function stopTask() {
@@ -2071,9 +2240,21 @@ The page is rebuilt on every load by replaying all recorded run_js scripts, in o
             bindSettings();
             drawIcon($('attach-images-btn'), 'ImagePlus');
             $('attach-images-btn').onclick = () => $('image-files').click();
-            drawIcon($('voice-btn'), 'AudioLines'); drawIcon($('voice-live'), 'AudioLines');
-            $('voice-btn').onclick = () => voice ? stopVoice() : startVoice();
-            $('voice-live').onclick = () => stopVoice();
+            drawIcon($('voice-start'), 'AudioLines'); drawIcon($('voice-end'), 'X');
+            $('voice-start').onclick = () => startVoice();
+            $('voice-end').onclick = $('voice-hangup').onclick = () => stopVoice();
+            $('voice-main').onclick = () => { if (voice) voice.open = !voice.open; else voiceNotice = null; renderIsland(); };
+            $('voice-open').onclick = $('voice-task').onclick = openLiveTask;
+            $('voice-mute').onclick = () => {
+                if (!voice) return;
+                voice.muted = !voice.muted;
+                for (const track of voice.stream?.getAudioTracks() ?? []) track.enabled = !voice.muted;
+                renderIsland();
+            };
+            // The call's sheet closes like a menu: Escape, before the map takes it to go home, or a press anywhere else.
+            const closeSheet = () => { if (voice?.open) { voice.open = false; renderIsland(); } };
+            addEventListener('keydown', e => { if (e.key === 'Escape' && voice?.open) { e.preventDefault(); closeSheet(); } }, true);
+            addEventListener('pointerdown', e => { if (!e.target.closest?.('#voice-island, #voice-sheet')) closeSheet(); }, true);
             $('image-files').onchange = event => addImages(event.target.files);
             els.prompt.addEventListener('paste', event => {
                 const files = [...(event.clipboardData?.items || [])].filter(item => item.kind === 'file' && item.type.startsWith('image/')).map(item => item.getAsFile()).filter(Boolean);
