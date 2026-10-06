@@ -83,9 +83,11 @@
         #voice-text > span { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
         #voice-text > [data-quiet] { color: #ffffffa6; font-size: 11px; }
         #voice-text[data-tail] > #voice-bottom { direction: rtl; text-align: left; }
+        #voice-text[data-tail] > #voice-bottom:has(> :dir(rtl)) { direction: ltr; text-align: right; }
+        #voice-status { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
         #voice-open { height: 28px; padding: 0 12px; background: #ffffff26; font-size: 12px; font-weight: 600; }
         #voice-end { width: 36px; height: 36px; background: #ffffff1f; }
-        #voice-task { position: relative; width: 44px; height: 44px; font-size: 12px; font-weight: 600; font-variant-numeric: tabular-nums; animation: voice-in .3s cubic-bezier(.2, .9, .3, 1.15); }
+        #voice-task { position: absolute; top: 0; left: calc(100% + 6px); width: 44px; height: 44px; font-size: 12px; font-weight: 600; font-variant-numeric: tabular-nums; animation: voice-in .3s cubic-bezier(.2, .9, .3, 1.15); }
         #voice-task > .voice-ring { position: absolute; inset: 6px; width: auto; height: auto; }
         #voice-task:not([data-state="running"]) > :is(.voice-ring, #voice-count), #voice-task[data-state="running"] > #voice-task-icon { display: none; }
         #voice-sheet { --from: .96; position: absolute; top: 62px; left: 50%; translate: -50% 0; display: flex; flex-direction: column; gap: 12px; width: min(420px, 100vw - 32px); max-height: min(60vh, 440px); padding: 16px; border-radius: 22px; color: #1d1d1f; background: #fff; box-shadow: 0 16px 48px #1823332e, 0 0 0 1px #18233310; font-size: 14px; transform-origin: top; animation: voice-in .24s ease-out; }
@@ -233,6 +235,7 @@
             #map-toolbar { height: 60px; padding: 0 8px; }
             #map-home { font-size: 14px; }
             #voice-island { position: static; translate: none; flex: 1; justify-content: flex-end; min-width: 0; }
+            #voice-task { position: relative; top: auto; left: auto; }
             .voice-pill { width: 168px; min-width: 0; }
             #voice-island[data-wide] .voice-pill { width: 100%; }
             #map-toolbar:has(#voice-island[data-wide]:not([hidden])) #map-home-title { display: none; }
@@ -401,6 +404,7 @@
             <div class="voice-actions"><button id="voice-mute" type="button" aria-pressed="false">Mute</button><button id="voice-hangup" type="button">End</button></div>
         </div>
         <button id="voice-start" type="button" aria-label="Start voice" title="Start voice" hidden></button>
+        <span id="voice-status" role="status"></span>
     </header>
     <!-- Host classes toggled at runtime, listed once so the Tailwind CDN compiles them up front instead of rebuilding its stylesheet the first time each appears mid-animation. -->
     <span hidden aria-hidden="true" class="has-focus has-overlay is-expanded is-switching is-panning is-focused no-animations desktop-window is-dragging is-running is-error core-note core-task task-prompt task-result task-steps step-list tool-entry tool-status message-images voice-call is-user is-task is-voice voice-mark task-live"></span>
@@ -1019,7 +1023,8 @@ The page is rebuilt on every load by replaying all recorded run_js scripts, in o
         // A live conversation with a realtime voice model over WebRTC. The voice model talks, shows apps and reads them on this page, which is
         // instant; every change goes to the agent loop through run_task, so spoken requests become ordinary saved tasks.
         // The call lives in the island at the top of the map, over every app; the conversation keeps one folded record of it.
-        let voice = null, voiceNotice = null, liveTask = null, islandTimer = 0;   // the call, a short note after it fails, and the task the island follows
+        let voice = null, voiceNotice = null, liveTask = null, islandTimer = 0, openApp = null;   // the call, a short note after it fails, the task the island follows, the app the map has open
+        const announce = text => { $('voice-status').textContent = text; };   // call states for screen readers; captions are left to the voice itself
         const voiceSupported = !!(window.RTCPeerConnection && navigator.mediaDevices?.getUserMedia);
         const voiceTools = [
             ["run_task", "Make, change or remove apps, their look or their content, or answer what read_app cannot. Pass the person's request in their own words and language, with details they gave earlier in the call.", { request: { type: 'string' } }],
@@ -1056,7 +1061,7 @@ The page is rebuilt on every load by replaying all recorded run_js scripts, in o
             if (session.audio) session.audio.srcObject = null;
             session.context?.close().catch(() => {});
         }
-        function stopVoice(message = '') {
+        function stopVoice(title = '', detail = '') {
             const session = voice;
             if (!session) return;
             voice = null; closeVoice(session);
@@ -1064,7 +1069,9 @@ The page is rebuilt on every load by replaying all recorded run_js scripts, in o
                 const seconds = Math.round((Date.now() - session.started) / 1000);
                 session.record.firstElementChild.textContent = `Voice call · ${seconds < 60 ? `${Math.max(seconds, 1)} s` : `${Math.round(seconds / 60)} min`}`;
             }
-            if (message) { log('error', message); voiceNotice = { text: message, until: Date.now() + 6000 }; }
+            const message = detail ? `${title}: ${detail}` : title;
+            if (title) { log('error', message); voiceNotice = { title, detail, until: Date.now() + 6000 }; }
+            announce(message || 'Voice ended');
             renderControls();
         }
 
@@ -1092,7 +1099,8 @@ The page is rebuilt on every load by replaying all recorded run_js scripts, in o
                 $('api-key').focus();
                 return log('error', 'Set your API key and voice model to talk with Ouroboros.');
             }
-            const session = voice = { status: 'Connecting…', calls: new Set(), heard: '', said: '', quietAt: 0, begun: Date.now(), taskLines: new Map() };
+            const session = voice = { status: 'Connecting…', calls: new Set(), heard: '', said: '', quietAt: 0, turns: new Map(), taskLines: new Map() };
+            announce(session.status);
             voiceNotice = null; $('voice-transcript').replaceChildren();
             try { session.context = new AudioContext(); } catch {}   // made during the click, which lets it run
             renderControls();
@@ -1118,7 +1126,7 @@ The page is rebuilt on every load by replaying all recorded run_js scripts, in o
                 pc.onconnectionstatechange = () => { if (pc.connectionState === 'failed' && voice === session) stopVoice('The voice connection was lost.'); };
                 pc.addTrack(session.stream.getAudioTracks()[0], session.stream);
                 const channel = session.channel = pc.createDataChannel('oai-events');
-                channel.onopen = () => { if (voice !== session) return; session.status = 'Listening'; session.started = Date.now(); renderIsland(); };
+                channel.onopen = () => { if (voice !== session) return; session.status = 'Listening'; session.started = Date.now(); announce(session.status); renderIsland(); };
                 channel.onclose = () => { if (voice === session) stopVoice('The voice session ended.'); };   // the server ended it, for instance at its time limit
                 channel.onmessage = event => { try { voiceEvent(JSON.parse(event.data), session); } catch (e) { console.error('Voice event failed:', e); } };
                 const offer = await pc.createOffer();
@@ -1129,7 +1137,7 @@ The page is rebuilt on every load by replaying all recorded run_js scripts, in o
                 if (ended()) return;
                 await pc.setRemoteDescription({ type: 'answer', sdp });
             } catch (e) {
-                if (voice === session) stopVoice(`Could not start voice: ${e.name === 'NotAllowedError' ? 'allow microphone access in the browser.' : e.message}`);
+                if (voice === session) stopVoice('Could not start voice', e.name === 'NotAllowedError' ? 'Allow microphone access in the browser.' : e.message);
                 else closeVoice(session);
             }
         }
@@ -1137,18 +1145,24 @@ The page is rebuilt on every load by replaying all recorded run_js scripts, in o
         // Live captions: what the person said this turn, and what the voice is saying. They fade once nobody has spoken for a moment.
         function voiceEvent(event, session) {
             if (voice !== session) return;
-            const { type } = event;
-            if (type === 'input_audio_buffer.speech_started') Object.assign(session, { speaking: true, heard: '', said: '' });
+            const { type } = event, now = Date.now();
+            if (type.startsWith('response.output_audio_transcript.') && event.response_id && event.response_id === session.cut) return;   // the rest of a reply they talked over
+            if (type === 'input_audio_buffer.speech_started') {
+                if (session.said && !session.saidLogged) voiceLine(session, 'assistant', `${session.said.trim()}…`);   // the part of the reply they heard
+                Object.assign(session, { speaking: true, heard: '', said: '', saidLogged: true, cut: session.reply });
+            }
             else if (type === 'input_audio_buffer.speech_stopped') session.speaking = false;
+            else if (type === 'input_audio_buffer.committed') voiceLine(session, 'user', '', event.item_id);   // holds the turn's place: its words can come after the answer
             else if (type === 'conversation.item.input_audio_transcription.delta') session.heard += event.delta ?? '';
-            else if (type === 'conversation.item.input_audio_transcription.completed') { session.heard = event.transcript?.trim() ?? ''; voiceLine(session, 'user', session.heard); }
-            else if (type === 'response.created') Object.assign(session, { responding: true, said: '' });
+            else if (type === 'conversation.item.input_audio_transcription.completed') { session.heard = event.transcript?.trim() ?? ''; voiceLine(session, 'user', session.heard, event.item_id); }
+            else if (type === 'response.created') Object.assign(session, { responding: true, said: '', saidLogged: false, reply: event.response?.id });
             else if (type === 'response.output_audio_transcript.delta') session.said += event.delta ?? '';
-            else if (type === 'response.output_audio_transcript.done') { session.said = event.transcript?.trim() || session.said; voiceLine(session, 'assistant', session.said); }
-            else if (type === 'output_audio_buffer.started') session.playing = true;
+            else if (type === 'response.output_audio_transcript.done') { session.said = event.transcript?.trim() || session.said; session.saidLogged = true; voiceLine(session, 'assistant', session.said); }
+            else if (type === 'output_audio_buffer.started') Object.assign(session, { playing: true, playingUntil: now + 60000 });
             else if (type === 'output_audio_buffer.stopped' || type === 'output_audio_buffer.cleared') session.playing = false;
             else if (type === 'response.done') {
                 session.responding = false;
+                session.playingUntil = Math.min(session.playingUntil ?? 0, now + 30000);   // in case the end of playback is never reported
                 const usage = event.response?.usage;
                 if ([usage?.input_tokens, usage?.output_tokens].every(n => Number.isInteger(n) && n >= 0)) {
                     settings.usage.input += usage.input_tokens; settings.usage.output += usage.output_tokens; settings.usage.responses++;
@@ -1158,7 +1172,7 @@ The page is rebuilt on every load by replaying all recorded run_js scripts, in o
                 if (session.replyPending) { session.replyPending = false; voiceSend(session, { type: 'response.create' }); }
             } else if (type === 'error') log('error', `Voice: ${event.error?.message || 'the voice model reported an error.'}`);
             else return;
-            session.quietAt = Date.now() + 4000;
+            session.quietAt = now + 4000;
             renderIsland();
         }
 
@@ -1579,6 +1593,8 @@ The page is rebuilt on every load by replaying all recorded run_js scripts, in o
             const previousScrollX = desktop.scrollLeft, previousScrollY = desktop.scrollTop;
             const view = { width, height, board, scrollX: spread ? previousScrollX : 0, scrollY: spread ? Math.min(previousScrollY, Math.max(0, board.height - height)) : 0 };
             desktop.classList.toggle('has-focus', focus > .95);
+            const open = focus > .95 ? camera.focus : null;
+            if (open !== openApp) { openApp = open; renderIsland(); }   // Open on the island is for an app that is not open
             desktop.classList.toggle('has-overlay', spread > 0 && focus > 0);
             desktop.classList.toggle('is-expanded', spread > 0 || expanded);
             desktop.classList.toggle('is-switching', switching);
@@ -1662,7 +1678,6 @@ The page is rebuilt on every load by replaying all recorded run_js scripts, in o
                 return;
             }
             camera.focus = id;
-            renderIsland();   // an app that is already open needs no Open on the island
             moveCamera({ x: win.x, y: win.y, zoom: focusEnd(), expansion: Number(expanded) }, animate);
         }
 
@@ -1951,88 +1966,103 @@ The page is rebuilt on every load by replaying all recorded run_js scripts, in o
             if (follow || kind === 'user') els.log.scrollTop = els.log.scrollHeight;
         }
 
-        // A finished turn goes to the island's sheet, and to one folded record of the call in the conversation. Only the tasks are saved.
-        function voiceLine(session, role, text) {
-            if (!text) return;
-            const follow = nearBottom(), line = document.createElement('p');
-            if (role === 'user') line.className = 'is-user';
-            line.textContent = text;
-            if (!session.record) {
-                $('empty-state')?.remove();
-                session.record = document.createElement('details'); session.record.className = 'voice-call';
-                session.record.innerHTML = '<summary>Voice call</summary><div></div>';
-                els.log.append(session.record);
+        // Each turn goes to the island's sheet, and to one folded record of the call in the conversation. Only the tasks are saved.
+        // The person's turn takes its place when their speech is committed, since its words can arrive after the voice has answered.
+        function voiceLine(session, role, text = '', id = '') {
+            let lines = id && session.turns.get(id);
+            if (!lines) {
+                if (!session.record) {
+                    $('empty-state')?.remove();
+                    session.record = document.createElement('details'); session.record.className = 'voice-call';
+                    session.record.innerHTML = '<summary>Voice call</summary><div></div>';
+                    els.log.append(session.record);
+                }
+                lines = [document.createElement('p'), document.createElement('p')];
+                for (const line of lines) { line.hidden = true; if (role === 'user') line.className = 'is-user'; }
+                session.record.lastElementChild.append(lines[0]);
+                sheetChange(() => $('voice-transcript').append(lines[1]));
+                if (id) session.turns.set(id, lines);
             }
-            session.record.lastElementChild.append(line);
-            sheetLine(line.cloneNode(true));
+            if (!text) return;
+            const follow = nearBottom();
+            sheetChange(() => { for (const line of lines) { line.textContent = text; line.hidden = false; } });
             if (follow) els.log.scrollTop = els.log.scrollHeight;
         }
-        function sheetLine(line) {
+        // The sheet keeps to its latest line unless it was scrolled back.
+        function sheetChange(change) {
             const list = $('voice-transcript'), follow = list.scrollHeight - list.scrollTop - list.clientHeight < 24;
-            list.append(line);
+            change();
             if (follow) list.scrollTop = list.scrollHeight;
         }
 
+        const ICONS = { muted: 'MicOff', done: 'Check', failed: 'CircleAlert' };
+        const taskApp = task => task.apps.find(id => windows.has(id));   // the app a change makes or updates, which Open shows
         // What the island says about a change: the app it makes or updates, and how far it has got.
         function taskLabel(task) {
-            const id = task.apps.find(id => windows.has(id)), title = id && windows.get(id).title, made = id && !task.existing.has(id);
+            const id = taskApp(task), title = id && windows.get(id).title, made = id && !task.existing.has(id);
             const steps = task.steps ? `${task.steps} step${task.steps === 1 ? '' : 's'}` : '';
             if (task.state === 'running') return [title ? `${made ? 'Making' : 'Updating'} ${title}` : 'Working on it', [task.step, steps].filter(Boolean).join(' · ')];
             if (task.state === 'done') return [title ? `${title} ${made ? 'is ready' : 'updated'}` : 'Done', steps];   // once it ends the island shows only the first part
             return [task.state === 'stopped' ? 'Stopped' : "Couldn't finish", steps];
         }
 
-        // The island shows the call as it is now: what is being said, else the change under way or just made, else that it is listening.
-        // While the call talks over a change, the change moves to a circle beside the pill.
+        // The island shows the call as it is now: the turn under way, else the change this call is waiting on, else that it is listening.
+        // When a turn talks over a change, the change moves to a circle beside the pill.
         function renderIsland() {
             const session = voice, island = $('voice-island'), now = Date.now();
             const notice = !session && voiceNotice?.until > now ? voiceNotice : null;
+            clearTimeout(islandTimer);
             $('voice-start').hidden = !voiceSupported || !!session || busy;
             island.hidden = !session && !notice;
             $('voice-sheet').hidden = !session?.open;
             $('voice-main').setAttribute('aria-expanded', String(!!session?.open));
-            clearTimeout(islandTimer);
             if (island.hidden) return;
-            if (session && now >= session.quietAt && !session.speaking && !session.playing && !session.responding) session.heard = session.said = '';
-            const task = session && (liveTask?.state === 'running' || liveTask?.until > now) ? liveTask : null;
-            const talking = !!(session && (session.speaking || session.playing || session.heard || session.said));
-            let glyph = session?.muted ? 'muted' : 'meter', top = '', bottom = session?.muted ? 'Muted' : session?.status, quiet = 'top', tail = false, wide = true, app = null;
-            if (notice) { glyph = 'failed'; [top, bottom] = notice.text.includes(': ') ? notice.text.split(/: (.*)/s) : ['', notice.text]; bottom = bottom[0].toUpperCase() + bottom.slice(1); }
-            else if (talking && (session.heard || session.said)) { top = session.said ? session.heard : ''; bottom = session.said || session.heard; tail = true; }
-            else if (task && !talking) {
+            const playing = session?.playing && now < session.playingUntil;
+            const talking = !!session && (session.speaking || session.responding || playing || now < session.quietAt);   // a turn is under way, or just ended
+            if (session && !talking) session.heard = session.said = '';
+            // A change shows once the call is connected; after it ends, only if this call saw it run.
+            const task = session?.started && liveTask && (liveTask.state === 'running' || (liveTask.until > now && session.taskLines.has(liveTask.task))) ? liveTask : null;
+            const phase = task && (task.state === 'running' || task.state === 'done' ? task.state : 'failed');
+            let glyph = session?.muted ? 'muted' : 'meter', top = '', bottom = session?.muted ? 'Muted' : session?.status, quiet = 'top', app = null;
+            if (notice) { glyph = 'failed'; [top, bottom] = notice.detail ? [notice.title, notice.detail] : ['', notice.title]; }
+            else if (talking) { if (session.said) top = session.heard; bottom = session.said || session.heard || bottom; }
+            else if (task) {
                 [top, bottom] = taskLabel(task); quiet = 'bottom';
-                if (task.state !== 'running') bottom = '';
-                glyph = { running: 'ring', done: 'done' }[task.state] ?? 'failed';
-                app = task.state === 'done' && task.apps.find(id => windows.has(id) && id !== camera.focus);
-            } else wide = !!session?.open;   // an open sheet hangs from a pill as wide as itself
+                if (phase !== 'running') bottom = '';
+                glyph = phase === 'running' ? 'ring' : phase;
+                if (phase === 'done' && taskApp(task) !== openApp) app = taskApp(task);
+            }
             if (island.dataset.glyph !== glyph) {
                 island.dataset.glyph = glyph;
-                if (!['meter', 'ring'].includes(glyph)) drawIcon($('voice-icon'), { muted: 'MicOff', done: 'Check', failed: 'CircleAlert' }[glyph]);
+                if (ICONS[glyph]) drawIcon($('voice-icon'), ICONS[glyph]);
             }
-            island.toggleAttribute('data-wide', wide);
-            $('voice-text').toggleAttribute('data-tail', tail);
+            island.toggleAttribute('data-wide', talking || !!task || !!notice || !!session?.open);   // an open sheet hangs from a pill as wide as itself
+            $('voice-text').toggleAttribute('data-tail', talking && !!(session.said || session.heard));
             updateValue($('voice-top'), 'textContent', top); $('voice-top').hidden = !top;
             updateValue($('voice-bottom').firstElementChild, 'textContent', bottom);
             $('voice-top').toggleAttribute('data-quiet', quiet === 'top'); $('voice-bottom').toggleAttribute('data-quiet', quiet === 'bottom' && !!top);
             $('voice-open').hidden = !app; $('voice-end').hidden = !session;
-            const circle = $('voice-task'), state = task && ({ running: 'running', done: 'done' }[task.state] ?? 'failed');
+            if (app) $('voice-open').setAttribute('aria-label', `Open ${windows.get(app).title}`);
+            const circle = $('voice-task');
             circle.hidden = !(talking && task);
             if (!circle.hidden) {
-                if (circle.dataset.state !== state) { circle.dataset.state = state; if (state !== 'running') drawIcon($('voice-task-icon'), state === 'done' ? 'Check' : 'CircleAlert'); }
+                if (circle.dataset.state !== phase) { circle.dataset.state = phase; if (ICONS[phase]) drawIcon($('voice-task-icon'), ICONS[phase]); }
                 updateValue($('voice-count'), 'textContent', task.steps ? String(task.steps) : '');
                 circle.title = taskLabel(task).filter(Boolean).join(' · '); circle.setAttribute('aria-label', circle.title);
             }
             if (session) {
-                if (task && (task.state === 'running' || task.task > session.begun)) {
+                if (task) {
                     let line = session.taskLines.get(task.task);
-                    if (!line) { line = document.createElement('p'); line.className = 'is-task'; session.taskLines.set(task.task, line); sheetLine(line); }
+                    if (!line) { line = document.createElement('p'); line.className = 'is-task'; session.taskLines.set(task.task, line); sheetChange(() => $('voice-transcript').append(line)); }
                     updateValue(line, 'textContent', taskLabel(task).filter(Boolean).join(' · '));
+                    if (phase !== 'running' && session.told !== task.task) { session.told = task.task; announce(taskLabel(task)[0]); }
                 }
-                updateValue($('voice-mute'), 'textContent', session.muted ? 'Unmute' : 'Mute');
                 $('voice-mute').setAttribute('aria-pressed', String(!!session.muted));
                 if (glyph === 'meter' && !session.frame && !animationsDisabled()) session.frame = requestAnimationFrame(meterFrame);
             }
-            const wake = [session?.heard || session?.said ? session.quietAt : 0, task && task.state !== 'running' ? task.until : 0, notice?.until ?? 0].filter(time => time > now);
+            // Wake when the turn may be over, a finished change's note runs out, or the notice does.
+            const turnEnds = session && !session.speaking && !session.responding ? Math.max(session.quietAt, playing ? session.playingUntil : 0) : 0;
+            const wake = [talking ? turnEnds : 0, phase && phase !== 'running' ? task.until : 0, notice?.until ?? 0].filter(time => time > now);
             if (wake.length) islandTimer = setTimeout(renderIsland, Math.min(...wake) - now + 20);
         }
 
@@ -2044,14 +2074,14 @@ The page is rebuilt on every load by replaying all recorded run_js scripts, in o
                 return;
             }
             session.frame = requestAnimationFrame(meterFrame);
-            const level = Math.min(1, Math.max(session.muted ? 0 : loudness(session.mic), loudness(session.speaker)) * 6);
+            const level = Math.min(1, Math.max(loudness(session.mic), loudness(session.speaker)) * 6);   // never muted here: muted shows its icon instead
             session.level = Math.max(level, (session.level ?? 0) * .86);   // rises at once and falls slowly
             bars.forEach((bar, i) => updateValue(bar.style, 'height', `${Math.round(4 + 14 * session.level * [.55, .8, 1, .75, .5][i] * (.7 + .3 * Math.sin(now / 110 + i * 1.9)))}px`));
         }
 
-        // The circle, or Open, shows what a change made; while it runs, or when it fails, the conversation where it reports.
+        // The circle, or Open, shows the app a change made; while it runs, or when it fails, the conversation where it reports.
         function openLiveTask() {
-            const id = liveTask?.state === 'done' && liveTask.apps.find(id => windows.has(id));
+            const id = liveTask?.state === 'done' && taskApp(liveTask);
             focusApp(id || 'ouroboros-core');
             if (liveTask && liveTask.state !== 'running') liveTask.until = 0;
             renderIsland();
@@ -2242,8 +2272,17 @@ The page is rebuilt on every load by replaying all recorded run_js scripts, in o
             $('attach-images-btn').onclick = () => $('image-files').click();
             drawIcon($('voice-start'), 'AudioLines'); drawIcon($('voice-end'), 'X');
             $('voice-start').onclick = () => startVoice();
-            $('voice-end').onclick = $('voice-hangup').onclick = () => stopVoice();
-            $('voice-main').onclick = () => { if (voice) voice.open = !voice.open; else voiceNotice = null; renderIsland(); };
+            const inIsland = () => !!document.activeElement?.closest('#voice-island, #voice-sheet');
+            $('voice-end').onclick = $('voice-hangup').onclick = () => {
+                const refocus = inIsland();
+                stopVoice();
+                if (refocus) $('voice-start').focus({ preventScroll: true });   // the button that ended the call is gone
+            };
+            $('voice-main').onclick = () => {
+                if (voice) voice.open = !voice.open; else voiceNotice = null;
+                renderIsland();
+                if (voice?.open) $('voice-transcript').scrollTop = $('voice-transcript').scrollHeight;   // lines arrive while it is closed
+            };
             $('voice-open').onclick = $('voice-task').onclick = openLiveTask;
             $('voice-mute').onclick = () => {
                 if (!voice) return;
@@ -2252,7 +2291,12 @@ The page is rebuilt on every load by replaying all recorded run_js scripts, in o
                 renderIsland();
             };
             // The call's sheet closes like a menu: Escape, before the map takes it to go home, or a press anywhere else.
-            const closeSheet = () => { if (voice?.open) { voice.open = false; renderIsland(); } };
+            const closeSheet = () => {
+                if (!voice?.open) return;
+                const refocus = $('voice-sheet').contains(document.activeElement);
+                voice.open = false; renderIsland();
+                if (refocus) $('voice-main').focus({ preventScroll: true });
+            };
             addEventListener('keydown', e => { if (e.key === 'Escape' && voice?.open) { e.preventDefault(); closeSheet(); } }, true);
             addEventListener('pointerdown', e => { if (!e.target.closest?.('#voice-island, #voice-sheet')) closeSheet(); }, true);
             $('image-files').onchange = event => addImages(event.target.files);
