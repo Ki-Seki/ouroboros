@@ -93,7 +93,7 @@
         .core-panel summary { cursor: pointer; }
         .core-panel .core-quiet { color: var(--muted); font-size: 12px; padding: 6px 8px; }
         .core-panel .core-quiet:hover:not(:disabled) { background: #00000008; color: var(--tile); }
-        .core-panel .core-settings { display: grid; align-content: start; gap: 24px; width: 100%; max-width: 480px; align-self: center; }
+        .core-panel .core-settings { display: grid; grid-template-columns: minmax(0, 1fr); align-content: start; gap: 24px; width: 100%; max-width: 480px; align-self: center; }
         .core-panel .settings-section { display: grid; gap: 12px; }
         .core-panel .settings-section + .settings-section { padding-top: 24px; border-top: 1px solid var(--line); }
         .core-panel .settings-section h3 { font-size: 12px; font-weight: 600; color: var(--ink); }
@@ -112,9 +112,10 @@
         .core-panel .usage-table :is(th, td) { padding: 4px 0; text-align: right; font-weight: 400; }
         .core-panel .usage-table th { color: var(--muted); }
         .core-panel .usage-table tr > :first-child { text-align: left; }
-        .core-panel .tile-list { display: grid; gap: 8px; }
+        .core-panel .tile-list { display: grid; grid-template-columns: minmax(0, 1fr); gap: 8px; }
         .core-panel .tile-list li { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
         .core-panel .tile-list span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .core-panel .tile-actions { display: flex; flex: none; gap: 8px; }
         .core-panel #activity-log { flex: 1; min-height: 0; container-type: inline-size; overflow-y: auto; padding: 24px; font-size: 14px; line-height: 1.6; overflow-wrap: anywhere; scrollbar-width: thin; }
         .core-panel .core-empty { display: grid; align-content: center; gap: 8px; height: 100%; padding: 24px 0; color: var(--muted); }
         .core-panel .core-empty h2 { color: var(--ink); font-size: 28px; font-weight: 500; line-height: 1.2; letter-spacing: -.035em; }
@@ -937,6 +938,7 @@ The page is rebuilt on every load by replaying all recorded run_js scripts, in o
         // Keep scripts, tile colors and data in order. History revisions point into this log.
         // The Settings uninstall writes this script. An import writes it too, marked `replaces`, before the file's version of an app the canvas already has.
         const removalScript = id => `document.getElementById(${JSON.stringify(id)})?.remove();`;
+        const names = (code, id) => new RegExp('(?<![\\w-])' + id.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '(?![\\w-])').test(code);   // the code spells out this id
         function saveTask(task, prompt, summary, before, images = []) {
             state.history = [...state.history, { role: 'user', content: prompt, task, before, ...(images.length ? { images } : {}) }, { role: 'assistant', content: summary, task, revision: state.mutations.length }].slice(-20);
             dataBoundary = state.mutations.length;
@@ -979,12 +981,40 @@ The page is rebuilt on every load by replaying all recorded run_js scripts, in o
                 const attached = historyImages(state.history);
                 const images = attached.length ? await Promise.all(attached.map(async image => ({ id: image.id, data: await imageDataUrl((await getImage(image)).blob) }))) : [];
                 const apps = [...windows.values()].filter(win => !win.el.matches(HARNESS)).map(win => win.el.id);
-                const html = pageWith({ ...state, ...(images.length ? { images } : {}), apps, savedAt: Date.now() });
-                const a = document.createElement('a');
-                a.href = URL.createObjectURL(new Blob([html], { type: 'text/html' }));
-                a.download = `ouroboros_${new Date().toLocaleString('sv').replace(/[: ]/g, '-')}.html`;
-                a.click(); URL.revokeObjectURL(a.href); log('system', 'Exported successfully.');
+                saveFile(pageWith({ ...state, ...(images.length ? { images } : {}), apps, savedAt: Date.now() }), 'ouroboros');
+                log('system', 'Exported successfully.');
             } catch (e) { log('error', `Could not export workspace: ${e.message}`); }
+            finally { exporting = false; renderControls(); }
+        }
+
+        function saveFile(html, name) {
+            const a = document.createElement('a');
+            a.href = URL.createObjectURL(new Blob([html], { type: 'text/html' }));
+            a.download = `${name.replace(/[\\/:*?"<>|]+/g, '-').trim() || 'ouroboros'}_${new Date().toLocaleString('sv').replace(/[: ]/g, '-')}.html`;
+            a.click(); URL.revokeObjectURL(a.href);
+        }
+
+        // One app travels on its own, in a page that opens or imports like any export: the scripts that make it, as read_app_source shows them,
+        // its colour and its saved data, including data keys its scripts name. Its scripts are declared for it alone, so an import never
+        // takes another app from the canvas, and the file has no conversation.
+        async function exportApp(id) {
+            const win = windows.get(id);
+            if (!win || win.el.matches(HARNESS) || locked()) return;
+            exporting = true; renderControls();
+            try {
+                flushContent();
+                const scripts = appSources(id).map(({ index }) => state.mutations[index]);
+                if (!scripts.length) throw new Error('it has no saved scripts.');
+                const others = new Set([...windows.keys(), ...state.mutations.flatMap(m => m.layout ? [m.layout.id] : [])]);   // other apps keep their own data
+                const keys = [...tileData.keys()].filter(key => key === id || (!others.has(key) && scripts.some(m => names(m.code, key))));
+                const mutations = [
+                    ...scripts.map(m => ({ ...(m.task === undefined ? {} : { task: m.task }), code: m.code, apps: [id] })),
+                    { layout: { id, tone: win.tone } },
+                    ...keys.map(key => ({ data: { id: key, value: copyData(tileData.get(key)) } })),
+                ];
+                saveFile(pageWith({ history: [], mutations, apps: [id], savedAt: Date.now() }), `ouroboros_${win.title}`);
+                log('system', `Exported ${win.title}.`);
+            } catch (e) { log('error', `Could not export ${win.title}: ${e.message}`); }
             finally { exporting = false; renderControls(); }
         }
 
@@ -1065,7 +1095,11 @@ The page is rebuilt on every load by replaying all recorded run_js scripts, in o
             const mutations = [...state.mutations, ...taken.map(id => ({ task, apps: [id], code: removalScript(id), replaces: true })), ...stale.map(id => ({ task, apps: [id], code: '', replaces: true })), ...records.map(m => typeof m.code === 'string' ? { ...m, task } : m)];
             const titles = ids => ids.map(id => windows.get(id).title).join(', ');
             const replaced = titles(listed ? taken.filter(id => listed.has(id)) : []), removed = titles(listed ? taken.filter(id => !listed.has(id)) : []), matched = titles(listed ? [] : taken);
-            const warning = [replaced && `${replaced} will be replaced by the file's version.`, removed && `${removed} will be removed, as in the file.`, matched && `${matched} will be replaced or removed to match the file.`].filter(Boolean).join(' ');
+            // The file's scripts may also reach other canvas apps they name, as a script that changed several apps at once does.
+            const named = [...windows.keys()].filter(id => !harness(id) && !taken.includes(id) && records.some(m => typeof m.code === 'string' && names(m.code, id)));
+            const touched = titles(named);
+            const warning = [replaced && `${replaced} will be replaced by the file's version.`, removed && `${removed} will be removed, as in the file.`, matched && `${matched} will be replaced or removed to match the file.`,
+                touched && `${touched} may change too, because the file's scripts mention ${named.length > 1 ? 'them' : 'it'}.`].filter(Boolean).join(' ');
             const summary = [`Imported the apps from ${name}.`, replaced && `Replaced ${replaced}.`, removed && `Removed ${removed}.`, matched && `Replaced or removed ${matched} to match the file.`].filter(Boolean).join(' ');
             const history = [...state.history, { role: 'user', content: `Import ${name}`, task, before: state.mutations.length }, { role: 'assistant', content: summary, task, revision: mutations.length }].slice(-20);
             return { warning, next: { history, mutations } };
@@ -1703,7 +1737,8 @@ The page is rebuilt on every load by replaying all recorded run_js scripts, in o
 
         function renderTiles() {
             const tiles = [...windows.values()].filter(win => !win.el.matches(HARNESS));
-            $('installed-tiles').innerHTML = tiles.map(win => `<li><span>${esc(win.title)}</span><button type="button" class="ui-button is-secondary is-danger shrink-0" data-uninstall="${esc(win.el.id)}" ${locked() ? 'disabled' : ''}>Uninstall</button></li>`).join('')
+            const disabled = locked() ? 'disabled' : '';
+            $('installed-tiles').innerHTML = tiles.map(win => `<li><span>${esc(win.title)}</span><div class="tile-actions"><button type="button" class="ui-button is-secondary" data-export="${esc(win.el.id)}" aria-label="Export ${esc(win.title)}" ${disabled}>Export</button><button type="button" class="ui-button is-secondary is-danger" data-uninstall="${esc(win.el.id)}" aria-label="Uninstall ${esc(win.title)}" ${disabled}>Uninstall</button></div></li>`).join('')
                 || '<li class="text-xs text-[var(--muted)]">No generated tiles yet.</li>';
         }
 
@@ -1794,7 +1829,11 @@ The page is rebuilt on every load by replaying all recorded run_js scripts, in o
                 const index = Number($('history-version').value), entry = state.history[index];
                 if (entry) restoreVersion(entry.revision ?? entry.before, index + (entry.role === 'assistant' ? 1 : 0));
             };
-            $('installed-tiles').onclick = e => { const button = e.target.closest('[data-uninstall]'); if (button) uninstallWindow(button.dataset.uninstall); };
+            $('installed-tiles').onclick = e => {
+                const button = e.target.closest('[data-export], [data-uninstall]');
+                if (button?.dataset.export) exportApp(button.dataset.export);
+                else if (button) uninstallWindow(button.dataset.uninstall);
+            };
             renderUsage();
         }
 
