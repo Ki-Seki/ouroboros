@@ -467,7 +467,10 @@ The page is rebuilt on every load by replaying all recorded run_js scripts, in o
     <script type="module">
         // --- CONSTANTS & HELPERS ---
         const MAX_STEPS = 40;
-        const MAX_IMAGES = 4, MAX_IMAGE_BYTES = 512 * 1024, MAX_IMAGE_SIDE = 2048;
+        const MAX_IMAGES = 20, MAX_IMAGE_BYTES = 512 * 1024, MAX_IMAGE_SIDE = 2048;
+        // The conversation and its versions keep 100 tasks. Each request re-sends only the latest 10 tasks and 40 images, as before they grew.
+        const HISTORY_MESSAGES = 200, CONTEXT_MESSAGES = 20, CONTEXT_IMAGES = 40;
+        const TRACE_TASKS = 50, TRACE_CHARS = 1000000;   // step logs, on this device only
         const SETTINGS_KEY = 'ouroboros:settings';
         const HARNESS = '#ouroboros-core, #ouroboros-settings, #map-toolbar, #desktop-wallpaper, #ouroboros-system_prompt, #ouroboros-state';
         const AsyncFunction = Object.getPrototypeOf(async function () {}).constructor;
@@ -502,12 +505,12 @@ The page is rebuilt on every load by replaying all recorded run_js scripts, in o
         const TRACE_KEY = CONTENT_KEY + ':activity';
         const load = key => { try { return JSON.parse(localStorage.getItem(key)); } catch { return null; } };
         const storedActivity = load(TRACE_KEY);
-        const activity = Array.isArray(storedActivity) ? storedActivity.filter(t => t && Number.isFinite(t.task) && Array.isArray(t.calls) && Array.isArray(t.requests)).slice(-10) : [];
+        const activity = Array.isArray(storedActivity) ? storedActivity.filter(t => t && Number.isFinite(t.task) && Array.isArray(t.calls) && Array.isArray(t.requests)).slice(-TRACE_TASKS) : [];
         // Diagnostic history is bounded and stays on this device, outside exported workspaces.
         let traceSaveFailed = false;
         function saveActivity() {
-            activity.splice(0, Math.max(0, activity.length - 10));
-            while (JSON.stringify(activity).length > 200000) {
+            activity.splice(0, Math.max(0, activity.length - TRACE_TASKS));
+            while (JSON.stringify(activity).length > TRACE_CHARS) {
                 if (activity.length > 1) activity.shift();
                 else if (activity[0]?.calls.length) { activity[0].calls.shift(); activity[0].droppedCalls = (activity[0].droppedCalls || 0) + 1; }
                 else break;
@@ -542,7 +545,14 @@ The page is rebuilt on every load by replaying all recorded run_js scripts, in o
             try { localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings)); return true; }
             catch (e) { log('error', `Could not save ${what}: ${e.message}`, task); return false; }
         };
-        const saveContent = () => { localStorage.setItem(CONTENT_KEY, JSON.stringify(state)); cancelSave(); };
+        // The workspace comes first: when the browser's storage is full, the oldest step logs make room for it.
+        const storeContent = value => {
+            for (const text = JSON.stringify(value); ;) {
+                try { return localStorage.setItem(CONTENT_KEY, text); }
+                catch (e) { if (e.name !== 'QuotaExceededError' || !activity.length) throw e; activity.splice(0, Math.ceil(activity.length / 2)); saveActivity(); }
+            }
+        };
+        const saveContent = () => { storeContent(state); cancelSave(); };
         const flushContent = () => {
             clearTimeout(saveTimer); saveTimer = 0;
             if (!contentDirty) return;
@@ -640,10 +650,9 @@ The page is rebuilt on every load by replaying all recorded run_js scripts, in o
 
         async function prepareImage(file) {
             if (!['image/png', 'image/jpeg', 'image/webp'].includes(file.type)) throw new Error('Choose PNG, JPEG or WebP images.');
-            if (file.size > 20 * 1024 * 1024) throw new Error(`${file.name} exceeds 20 MB.`);
+            if (file.size > 50 * 1024 * 1024) throw new Error(`${file.name} exceeds 50 MB.`);
             const bitmap = await createImageBitmap(file);
             try {
-                if (bitmap.width * bitmap.height > 32000000) throw new Error(`${file.name} has too many pixels.`);
                 const canvas = document.createElement('canvas'), context = canvas.getContext('2d');
                 let blob;
                 for (let side = MAX_IMAGE_SIDE; side >= 256; side = Math.floor(side * .8)) {
@@ -700,10 +709,11 @@ The page is rebuilt on every load by replaying all recorded run_js scripts, in o
             finally { preparingImages = false; renderDraftImages(); }
         }
 
-        async function inputMessage({ role, content, images = [] }, required = false) {
+        async function inputMessage({ role, content, images = [] }, required = false, sent = images.length) {
             if (!images.length) return { role, content };
             const parts = content ? [{ type: 'input_text', text: content }] : [];
-            for (const image of images) {
+            for (const [index, image] of images.entries()) {
+                if (index < images.length - sent) { parts.push({ type: 'input_text', text: `[Earlier image, not sent again: ${image.name}]` }); continue; }
                 try { const { blob } = await getImage(image); parts.push({ type: 'input_image', image_url: await imageDataUrl(blob), detail: 'auto' }); }
                 catch (e) { if (required) throw e; parts.push({ type: 'input_text', text: `[Earlier image unavailable: ${image.name}]` }); }
             }
@@ -966,7 +976,10 @@ The page is rebuilt on every load by replaying all recorded run_js scripts, in o
             try {
                 const instructions = systemPrompt();
                 runtimeErrors.length = 0;
-                const input = await Promise.all(state.history.map(message => inputMessage(message)));
+                const context = state.history.slice(-CONTEXT_MESSAGES);
+                let room = CONTEXT_IMAGES - images.length;   // the newest earlier images fill what this message leaves
+                const sent = context.toReversed().map(message => { const count = Math.max(0, Math.min(message.images?.length ?? 0, room)); room -= count; return count; }).reverse();
+                const input = await Promise.all(context.map((message, index) => inputMessage(message, false, sent[index])));
                 input.push(await inputMessage({ role: 'user', content: prompt, images }, true));
                 for (let step = 0; ; step++) {
                     if (step === MAX_STEPS) { trace.status = 'step_limit'; summary = `Stopped after ${MAX_STEPS} steps.`; log('error', summary, task); break; }
@@ -1215,7 +1228,7 @@ The page is rebuilt on every load by replaying all recorded run_js scripts, in o
         const removalScript = id => `document.getElementById(${JSON.stringify(id)})?.remove();`;
         const names = (code, id) => new RegExp('(?<![\\w-])' + id.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '(?![\\w-])').test(code);   // the code spells out this id
         function saveTask(task, prompt, summary, before, images = [], spoken = false) {
-            state.history = [...state.history, { role: 'user', content: prompt, task, before, ...(images.length ? { images } : {}), ...(spoken ? { voice: true } : {}) }, { role: 'assistant', content: summary, task, revision: state.mutations.length }].slice(-20);
+            state.history = [...state.history, { role: 'user', content: prompt, task, before, ...(images.length ? { images } : {}), ...(spoken ? { voice: true } : {}) }, { role: 'assistant', content: summary, task, revision: state.mutations.length }].slice(-HISTORY_MESSAGES);
             dataBoundary = state.mutations.length;
             saveContent();
             const tasks = new Set(state.history.map(message => `task-${message.task}`));
@@ -1321,7 +1334,7 @@ The page is rebuilt on every load by replaying all recorded run_js scripts, in o
                 if (m.data && (typeof m.data.id !== 'string' || !m.data.id.trim() || !Object.hasOwn(m.data, 'value'))) throw new Error('Invalid tile data.');
             }
             const attached = historyImages(data.history), images = data.images ?? [];
-            if (!Array.isArray(images) || images.length !== attached.length || images.length > MAX_IMAGES * 10 || new Set(images.map(image => image?.id)).size !== images.length) throw new Error('Invalid workspace images.');
+            if (!Array.isArray(images) || images.length !== attached.length || images.length > MAX_IMAGES * HISTORY_MESSAGES || new Set(images.map(image => image?.id)).size !== images.length) throw new Error('Invalid workspace images.');
             for (const image of attached) {
                 const packed = images.find(item => item?.id === image.id);
                 if (!packed) throw new Error(`Missing image: ${image.name}`);
@@ -1333,7 +1346,7 @@ The page is rebuilt on every load by replaying all recorded run_js scripts, in o
         // Every canvas swap writes the next content in one go, so the current canvas survives a storage failure, then reloads to replay it from the pristine page.
         // onWritten runs once the write has succeeded.
         async function restart(next, onWritten = () => {}) {
-            localStorage.setItem(CONTENT_KEY, JSON.stringify(next));
+            storeContent(next);
             cancelSave(); onWritten();
             busy = true; draftImages = [];
             if (imageDatabase) await pruneImages(next).catch(() => {});
@@ -1376,7 +1389,7 @@ The page is rebuilt on every load by replaying all recorded run_js scripts, in o
             const warning = [replaced && `${replaced} will be replaced by the file's version.`, removed && `${removed} will be removed, as in the file.`, matched && `${matched} will be replaced or removed to match the file.`,
                 touched && `${touched} may change too, because the file's scripts mention ${named.length > 1 ? 'them' : 'it'}.`].filter(Boolean).join(' ');
             const summary = [`Imported the apps from ${name}.`, replaced && `Replaced ${replaced}.`, removed && `Removed ${removed}.`, matched && `Replaced or removed ${matched} to match the file.`].filter(Boolean).join(' ');
-            const history = [...state.history, { role: 'user', content: `Import ${name}`, task, before: state.mutations.length }, { role: 'assistant', content: summary, task, revision: mutations.length }].slice(-20);
+            const history = [...state.history, { role: 'user', content: `Import ${name}`, task, before: state.mutations.length }, { role: 'assistant', content: summary, task, revision: mutations.length }].slice(-HISTORY_MESSAGES);
             return { warning, next: { history, mutations } };
         }
 
